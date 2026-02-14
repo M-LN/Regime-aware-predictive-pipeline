@@ -162,6 +162,32 @@ def _load_regime_models(config) -> Dict[int, Dict[str, object]]:
     return models
 
 
+def _load_registry_models(tracker, stage: str) -> Dict[int, Dict[str, object]]:
+    models: Dict[int, Dict[str, object]] = {}
+    model_env_map = {
+        0: os.getenv("MLFLOW_REGISTRY_MODEL_A"),
+        1: os.getenv("MLFLOW_REGISTRY_MODEL_B"),
+        2: os.getenv("MLFLOW_REGISTRY_MODEL_C"),
+    }
+
+    for regime_id, registry_name in model_env_map.items():
+        if not registry_name:
+            continue
+
+        model = tracker.load_model_from_registry(registry_name, stage=stage)
+        if model is None:
+            continue
+
+        models[regime_id] = {
+            "model": model,
+            "type": "mlflow_pyfunc",
+            "name": registry_name,
+        }
+        logger.info("Loaded regime %s model from MLflow registry: %s/%s", regime_id, registry_name, stage)
+
+    return models
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
@@ -398,6 +424,9 @@ async def predict(data: EnergyDataPoint) -> PredictionResponse:
             if model_type == "keras":
                 X_seq = X.reshape((X.shape[0], 1, X.shape[1]))
                 base_pred = float(model.predict(X_seq, verbose=0).reshape(-1)[0])
+            elif model_type == "mlflow_pyfunc":
+                X_df = pd.DataFrame(X, columns=feature_cols)
+                base_pred = float(model.predict(X_df)[0])
             else:
                 base_pred = float(model.predict(X)[0])
         else:

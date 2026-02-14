@@ -298,6 +298,27 @@ class MLflowTracker:
             if input_features:
                 self.log_params(input_features)
 
+    def load_model_from_registry(self, model_name: str, stage: str = "Production") -> Optional[Any]:
+        """
+        Load a model from the MLflow Model Registry.
+
+        Args:
+            model_name: Registered model name
+            stage: Model stage (e.g., "Production", "Staging")
+
+        Returns:
+            Loaded MLflow model or None on failure
+        """
+        if not self.enabled:
+            return None
+
+        try:
+            model_uri = f"models:/{model_name}/{stage}"
+            return mlflow.pyfunc.load_model(model_uri)
+        except Exception as e:
+            logger.warning("Failed to load model from registry %s (%s): %s", model_name, stage, e)
+            return None
+
 
 class _DummyContext:
     """Dummy context manager for when MLflow is disabled"""
