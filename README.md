@@ -7,6 +7,10 @@
 ![MLflow](https://img.shields.io/badge/MLflow-2.0+-orange)
 ![Docker](https://img.shields.io/badge/Docker-ready-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
+[![Tests](https://github.com/M-LN/Regime-aware-predictive-pipeline/actions/workflows/tests.yml/badge.svg)](https://github.com/M-LN/Regime-aware-predictive-pipeline/actions/workflows/tests.yml)
+[![Deploy](https://github.com/M-LN/Regime-aware-predictive-pipeline/actions/workflows/deploy.yml/badge.svg)](https://github.com/M-LN/Regime-aware-predictive-pipeline/actions/workflows/deploy.yml)
+[![Ingestion](https://github.com/M-LN/Regime-aware-predictive-pipeline/actions/workflows/ingest.yml/badge.svg)](https://github.com/M-LN/Regime-aware-predictive-pipeline/actions/workflows/ingest.yml)
+[![Coverage](https://codecov.io/gh/M-LN/Regime-aware-predictive-pipeline/branch/main/graph/badge.svg)](https://codecov.io/gh/M-LN/Regime-aware-predictive-pipeline)
 
 ---
 
