@@ -1,0 +1,32 @@
+name: Scheduled Ingestion
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run ingestion
+        env:
+          EDS_BASE_URL: ${{ secrets.EDS_BASE_URL }}
+          EDS_API_KEY: ${{ secrets.EDS_API_KEY }}
+          EDS_TIMEOUT: "30"
+          INGEST_LOOKBACK_HOURS: "24"
+        run: |
+          python -m src.ingestion.run_ingestion

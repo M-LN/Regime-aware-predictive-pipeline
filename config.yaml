@@ -1,0 +1,77 @@
+# Configuration file for Regime-Aware Prediction Pipeline
+
+# Data Configuration
+data:
+  raw_data_path: data/raw
+  feature_store_path: data/features
+  model_registry_path: data/models
+  api_base_url: null
+  api_timeout: 30
+  schema_validation_enabled: true
+  null_value_threshold: 0.1
+
+# Feature Engineering Configuration
+features:
+  rolling_windows: [1, 6, 24]
+  volatility_windows: [6, 24]
+  normalization_method: minmax
+  feature_versioning_enabled: true
+
+# Regime Detection Configuration
+regime:
+  algorithm: hmm  # or bayesian_cpd
+  n_regimes: 3
+  hmm_n_iter: 100
+  hmm_random_state: 42
+  bayesian_min_segment_length: 10
+
+# Model Configuration
+model:
+  regime_a_model: xgboost
+  regime_b_model: lstm
+  regime_c_model: random_forest
+  test_size: 0.2
+  validation_split: 0.1
+  random_state: 42
+  
+  # XGBoost (Regime A)
+  xgb_max_depth: 6
+  xgb_learning_rate: 0.1
+  xgb_n_estimators: 100
+  
+  # LSTM (Regime B)
+  lstm_units: 64
+  lstm_dropout: 0.2
+  lstm_epochs: 50
+  lstm_batch_size: 32
+  
+  # Random Forest (Regime C)
+  rf_n_estimators: 100
+  rf_max_depth: 15
+
+# Inference Configuration
+inference:
+  host: 0.0.0.0
+  port: 8000
+  workers: 4
+  reload: false
+  log_level: info
+  batch_prediction_enabled: true
+  cache_models: true
+  inference_timeout: 5
+
+# Monitoring Configuration
+monitoring:
+  enable_drift_detection: true
+  drift_detection_method: kl_divergence  # or wasserstein
+  drift_threshold: 0.3
+  mlflow_tracking_uri: http://localhost:5000
+  mlflow_experiment_name: regime-predictor
+  mlflow_backend_store_uri: file:///data/mlflow
+  track_inference_latency: true
+  track_model_confidence: true
+  track_regime_transitions: true
+
+# Environment
+environment: development
+debug: false

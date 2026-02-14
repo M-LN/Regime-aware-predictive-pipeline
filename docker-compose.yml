@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  # Main API Server
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=development
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - DEBUG=true
+    volumes:
+      - ./src:/app/src
+      - ./data:/app/data
+      - ./config.yaml:/app/config.yaml
+    depends_on:
+      - mlflow
+    command: uvicorn src.inference.api:app --host 0.0.0.0 --port 8000 --reload
+
+  # MLflow Tracking Server
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:latest
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./mlruns:/root/mlruns
+      - ./mlflow_backend:/mlflow_backend
+    environment:
+      - BACKEND_STORE_URI=file:///mlflow_backend
+      - DEFAULT_ARTIFACT_ROOT=/root/mlruns
+    command: mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri file:///mlflow_backend
+
+  # PostgreSQL for MLflow (optional, for scalability)
+  # postgres:
+  #   image: postgres:15
+  #   environment:
+  #     POSTGRES_USER: mlflow
+  #     POSTGRES_PASSWORD: mlflow_password
+  #     POSTGRES_DB: mlflow_db
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  mlruns:
+  mlflow_backend:
+  # postgres_data:
+
+networks:
+  default:
+    name: regime-network

@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: regime-predictor-config
+  namespace: default
+data:
+  config.yaml: |
+    data:
+      raw_data_path: /app/data/raw
+      feature_store_path: /app/data/features
+      model_registry_path: /app/data/models
+    features:
+      rolling_windows: [1, 6, 24]
+      volatility_windows: [6, 24]
+    regime:
+      algorithm: hmm
+      n_regimes: 3
+    monitoring:
+      enable_drift_detection: true
+      mlflow_tracking_uri: http://mlflow:5000
