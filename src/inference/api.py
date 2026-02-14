@@ -3,6 +3,7 @@ FastAPI inference server for regime-aware predictions
 """
 
 import logging
+import os
 from datetime import datetime
 from typing import Optional, List, Dict
 from pathlib import Path
@@ -31,6 +32,7 @@ from src.monitoring import (
     DriftDetector,
     RequestLogger,
     PredictionLogger,
+    StructuredLogger,
     get_correlation_id,
     set_correlation_id,
     clear_correlation_id
@@ -44,6 +46,7 @@ except Exception:
     HAS_TF = False
 
 logger = logging.getLogger(__name__)
+drift_logger = StructuredLogger("drift")
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -111,6 +114,10 @@ class AppState:
         self.regime_models: Dict[int, Dict[str, object]] = {}
         self.mlflow_tracker = None
         self.drift_detector = None
+        self.drift_auto_check_enabled = os.getenv("DRIFT_AUTO_CHECK_ENABLED", "true").lower() == "true"
+        self.drift_check_interval_seconds = int(os.getenv("DRIFT_CHECK_INTERVAL_SECONDS", "300"))
+        self.last_drift_check = None
+        self.last_drift_result = None
         self.ready = False
         self.error_message = None
 
@@ -435,6 +442,26 @@ async def predict(data: EnergyDataPoint) -> PredictionResponse:
                 app_state.drift_detector.update_regime(regime_id)
             except Exception as e:
                 logger.debug(f"Drift detector update failed: {e}")
+
+        # Auto-check drift at configured intervals
+        if app_state.drift_detector and app_state.drift_auto_check_enabled:
+            try:
+                now = datetime.utcnow()
+                if app_state.last_drift_check is None or (
+                    now - app_state.last_drift_check
+                ).total_seconds() >= app_state.drift_check_interval_seconds:
+                    status = app_state.drift_detector.get_status()
+                    if status.get("reference_distributions_set"):
+                        results = app_state.drift_detector.check_drift(auto_update_reference=False)
+                        app_state.last_drift_result = results
+                        app_state.last_drift_check = now
+
+                        if results.get("drift_detected"):
+                            drift_logger.warning("Drift detected", alerts=results.get("alerts", []))
+                        else:
+                            drift_logger.info("Drift check complete", drift_detected=False)
+            except Exception as e:
+                drift_logger.error("Drift auto-check failed", error=e)
         
         # MLflow tracking (sampled)
         if app_state.mlflow_tracker and app_state.mlflow_tracker.is_connected():
@@ -606,6 +633,21 @@ async def get_drift_alerts(hours: int = 24):
         "alerts": alerts,
         "count": len(alerts),
         "hours": hours,
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+
+@app.get("/drift/last", tags=["monitoring"])
+async def get_last_drift_check():
+    """
+    Get the most recent drift check results.
+    """
+    if not app_state.drift_detector:
+        raise HTTPException(status_code=503, detail="Drift detector not initialized")
+
+    return {
+        "last_check": app_state.last_drift_check.isoformat() if app_state.last_drift_check else None,
+        "last_result": app_state.last_drift_result,
         "timestamp": datetime.utcnow().isoformat()
     }
 

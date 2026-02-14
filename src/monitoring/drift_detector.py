@@ -152,6 +152,7 @@ class DriftDetector:
                 results["drift_detected"] = True
                 results["alerts"].append({
                     "type": "feature_drift",
+                    "timestamp": results["timestamp"],
                     "feature": name,
                     "severity": drift_metrics["severity"],
                     "metrics": drift_metrics
@@ -171,6 +172,7 @@ class DriftDetector:
                 results["drift_detected"] = True
                 results["alerts"].append({
                     "type": "prediction_drift",
+                    "timestamp": results["timestamp"],
                     "severity": pred_drift["severity"],
                     "metrics": pred_drift
                 })
@@ -185,6 +187,7 @@ class DriftDetector:
                 results["drift_detected"] = True
                 results["alerts"].append({
                     "type": "regime_drift",
+                    "timestamp": results["timestamp"],
                     "severity": regime_drift["severity"],
                     "current_distribution": regime_drift["current_distribution"],
                     "reference_distribution": regime_drift["reference_distribution"]
