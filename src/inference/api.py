@@ -9,10 +9,13 @@ from typing import Optional, List, Dict
 from pathlib import Path
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Request, Response
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Request, Response, Header, Depends
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 import numpy as np
 import pandas as pd
 import joblib
@@ -47,6 +50,7 @@ except Exception:
 
 logger = logging.getLogger(__name__)
 drift_logger = StructuredLogger("drift")
+limiter = Limiter(key_func=get_remote_address)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -98,6 +102,28 @@ class BatchPredictionResponse(BaseModel):
     predictions: List[PredictionResponse]
     n_succeeded: int
     n_failed: int
+
+
+# ============================================================================
+# Authentication & Rate Limiting
+# ============================================================================
+
+def _require_api_key(api_key: Optional[str] = Header(None, alias="X-API-Key")) -> None:
+    expected = os.getenv("API_KEY")
+    if not expected:
+        return
+    if api_key != expected:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+
+def _rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    return JSONResponse(
+        status_code=429,
+        content={
+            "error": "Rate limit exceeded",
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    )
 
 
 # ============================================================================
@@ -273,6 +299,8 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
 
 # Add CORS middleware (optional, for web frontends)
 app.add_middleware(
@@ -319,13 +347,14 @@ async def root():
             "health": "/health (GET)",
             "registry_status": "/registry/status (GET)",
             "registry_models": "/registry/models (GET)",
+            "registry_health": "/registry/health (GET)",
             "registry_reload": "/registry/reload (POST)",
             "metrics": "/metrics (GET)"
         }
     }
 
 
-@app.get("/registry/status", tags=["monitoring"])
+@app.get("/registry/status", tags=["monitoring"], dependencies=[Depends(_require_api_key)])
 async def registry_status():
     """
     Report MLflow registry configuration and loaded models per regime.
@@ -348,7 +377,7 @@ async def registry_status():
     }
 
 
-@app.get("/registry/models", tags=["monitoring"])
+@app.get("/registry/models", tags=["monitoring"], dependencies=[Depends(_require_api_key)])
 async def registry_models():
     """
     List MLflow registry models and latest versions.
@@ -364,7 +393,26 @@ async def registry_models():
     }
 
 
-@app.post("/registry/reload", tags=["monitoring"])
+@app.get("/registry/health", tags=["monitoring"], dependencies=[Depends(_require_api_key)])
+async def registry_health():
+    """
+    Check MLflow registry connectivity and access.
+    """
+    if not app_state.mlflow_tracker or not app_state.mlflow_tracker.is_connected():
+        raise HTTPException(status_code=503, detail="MLflow tracker not connected")
+
+    models = app_state.mlflow_tracker.list_registry_models()
+    access_ok = models is not None
+    return {
+        "connected": True,
+        "access_ok": access_ok,
+        "model_count": len(models or []),
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+
+@limiter.limit(os.getenv("RATE_LIMIT", "60/minute"))
+@app.post("/registry/reload", tags=["monitoring"], dependencies=[Depends(_require_api_key)])
 async def registry_reload():
     """
     Reload registry models without restarting the API.
@@ -415,7 +463,8 @@ async def health_check():
     )
 
 
-@app.post("/predict", response_model=PredictionResponse, tags=["prediction"])
+@limiter.limit(os.getenv("RATE_LIMIT", "60/minute"))
+@app.post("/predict", response_model=PredictionResponse, tags=["prediction"], dependencies=[Depends(_require_api_key)])
 async def predict(data: EnergyDataPoint) -> PredictionResponse:
     """
     Generate a single prediction with regime detection.
@@ -465,7 +514,9 @@ async def predict(data: EnergyDataPoint) -> PredictionResponse:
         metrics_tracker.start_regime_detection()
         regime_id = None
         confidence = 0.0
-        if app_state.regime_pipeline and app_state.regime_pipeline.detector.model is not None:
+        if app_state.config.regime.algorithm == "bayesian_cpd":
+            regime_id = None
+        elif app_state.regime_pipeline and app_state.regime_pipeline.detector.model is not None:
             try:
                 regime_proba = app_state.regime_pipeline.detector.predict_proba(X)
                 regime_id = int(np.argmax(regime_proba[0]))
@@ -559,6 +610,18 @@ async def predict(data: EnergyDataPoint) -> PredictionResponse:
 
                         if results.get("drift_detected"):
                             drift_logger.warning("Drift detected", alerts=results.get("alerts", []))
+                            webhook_url = os.getenv("ALERT_WEBHOOK_URL")
+                            min_severity = os.getenv("ALERT_MIN_SEVERITY", "medium")
+                            timeout_seconds = int(os.getenv("ALERT_TIMEOUT_SECONDS", "5"))
+
+                            if webhook_url and should_send_alert(results.get("alerts", []), min_severity):
+                                payload = {
+                                    "event": "drift_detected",
+                                    "timestamp": results.get("timestamp"),
+                                    "alerts": results.get("alerts", []),
+                                    "status": status
+                                }
+                                send_webhook(webhook_url, payload, timeout_seconds=timeout_seconds)
                         else:
                             drift_logger.info("Drift check complete", drift_detected=False)
             except Exception as e:
@@ -604,7 +667,8 @@ async def predict(data: EnergyDataPoint) -> PredictionResponse:
         raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
 
 
-@app.post("/batch_predict", response_model=BatchPredictionResponse, tags=["prediction"])
+@limiter.limit(os.getenv("RATE_LIMIT", "60/minute"))
+@app.post("/batch_predict", response_model=BatchPredictionResponse, tags=["prediction"], dependencies=[Depends(_require_api_key)])
 async def batch_predict(request: BatchPredictionRequest) -> BatchPredictionResponse:
     """
     Generate batch predictions.
@@ -667,7 +731,7 @@ async def status():
             "feature_windows": app_state.config.features.rolling_windows,
         },
         "models": {
-            "regime_detector": "hmm",
+            "regime_detector": app_state.config.regime.algorithm,
             "regime_models": [entry["name"] for entry in app_state.regime_models.values()]
         },
         "monitoring": {
@@ -679,7 +743,7 @@ async def status():
     }
 
 
-@app.post("/drift/check", tags=["monitoring"])
+@app.post("/drift/check", tags=["monitoring"], dependencies=[Depends(_require_api_key)])
 async def check_drift():
     """
     Manually trigger drift detection check.
@@ -697,7 +761,7 @@ async def check_drift():
         raise HTTPException(status_code=500, detail=f"Drift check failed: {str(e)}")
 
 
-@app.post("/drift/set_reference", tags=["monitoring"])
+@app.post("/drift/set_reference", tags=["monitoring"], dependencies=[Depends(_require_api_key)])
 async def set_drift_reference():
     """
     Set current distributions as reference baseline for drift detection.
@@ -718,7 +782,7 @@ async def set_drift_reference():
         raise HTTPException(status_code=500, detail=f"Failed to set reference: {str(e)}")
 
 
-@app.get("/drift/alerts", tags=["monitoring"])
+@app.get("/drift/alerts", tags=["monitoring"], dependencies=[Depends(_require_api_key)])
 async def get_drift_alerts(hours: int = 24):
     """
     Get recent drift alerts.
@@ -738,7 +802,7 @@ async def get_drift_alerts(hours: int = 24):
     }
 
 
-@app.get("/drift/last", tags=["monitoring"])
+@app.get("/drift/last", tags=["monitoring"], dependencies=[Depends(_require_api_key)])
 async def get_last_drift_check():
     """
     Get the most recent drift check results.

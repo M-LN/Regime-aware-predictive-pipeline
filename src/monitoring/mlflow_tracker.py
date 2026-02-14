@@ -9,6 +9,7 @@ Tracks:
 """
 
 import logging
+import os
 from typing import Optional, Dict, Any
 from pathlib import Path
 import tempfile
@@ -244,11 +245,29 @@ class MLflowTracker:
             self.log_metrics(metrics)
             
             # Log model
+            artifact_path = f"regime_{regime_id}_model"
             self.log_model(
                 model,
-                artifact_path=f"regime_{regime_id}_model",
+                artifact_path=artifact_path,
                 model_type=model_type
             )
+
+            # Optional: promote to registry
+            promote_enabled = os.getenv("MLFLOW_REGISTRY_PROMOTE", "false").lower() == "true"
+            if promote_enabled:
+                stage = os.getenv("MLFLOW_REGISTRY_STAGE", "Staging")
+                name_template = os.getenv("MLFLOW_REGISTRY_NAME_TEMPLATE", "regime_{regime_id}_{model_name}")
+                registry_name = name_template.format(regime_id=regime_id, model_name=model_name)
+                run_id = mlflow.active_run().info.run_id if mlflow.active_run() else None
+                if run_id:
+                    self.register_and_promote_model(
+                        run_id=run_id,
+                        artifact_path=artifact_path,
+                        registry_name=registry_name,
+                        stage=stage
+                    )
+                else:
+                    logger.warning("No active MLflow run; registry promotion skipped")
             
             logger.info(f"Logged training run: {run_name} - MAE: {metrics.get('mae', 'N/A')}")
     
@@ -318,6 +337,32 @@ class MLflowTracker:
         except Exception as e:
             logger.warning("Failed to load model from registry %s (%s): %s", model_name, stage, e)
             return None
+
+    def register_and_promote_model(
+        self,
+        run_id: str,
+        artifact_path: str,
+        registry_name: str,
+        stage: str
+    ) -> None:
+        """
+        Register a model from a run and promote to a stage.
+        """
+        if not self.enabled or self.client is None:
+            return
+
+        try:
+            model_uri = f"runs:/{run_id}/{artifact_path}"
+            result = mlflow.register_model(model_uri, registry_name)
+            self.client.transition_model_version_stage(
+                name=registry_name,
+                version=result.version,
+                stage=stage,
+                archive_existing_versions=False
+            )
+            logger.info("Registered model %s version %s to stage %s", registry_name, result.version, stage)
+        except Exception as e:
+            logger.warning("Failed to register/promote model %s: %s", registry_name, e)
 
     def list_registry_models(self) -> Optional[list]:
         """

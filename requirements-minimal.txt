@@ -9,6 +9,7 @@ scikit-learn>=1.5.0
 
 # Regime Detection
 hmmlearn>=0.3.3
+ruptures>=1.1.9
 
 # API & Web Framework
 fastapi>=0.110.0
@@ -16,6 +17,7 @@ uvicorn>=0.28.0
 pydantic>=2.7.0
 python-multipart>=0.0.6
 requests>=2.31.0
+slowapi>=0.1.8
 
 # Configuration & Utilities
 python-dotenv>=1.0.0

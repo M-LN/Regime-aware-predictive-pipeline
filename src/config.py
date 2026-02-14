@@ -52,6 +52,8 @@ class RegimeConfig:
     
     # For Bayesian CPD
     bayesian_min_segment_length: int = 10
+    bayesian_penalty: float = 10.0
+    bayesian_signal_col: str = "price"
 
 
 @dataclass

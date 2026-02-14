@@ -69,17 +69,27 @@ def main():
     logger.info(f"  Features: {[col for col in df_features.columns if col not in df_raw.columns][:5]}...")
     
     # Step 3: Regime Detection
-    logger.info("\n[3/5] Regime Detection (HMM Training)")
+    logger.info("\n[3/5] Regime Detection")
     logger.info("-" * 60)
     
     # Get feature columns for regime detection
     excluded_cols = ['timestamp', 'ingestion_timestamp', 'data_source', 'energy_production']
     feature_cols = [col for col in df_features.columns if col not in excluded_cols]
     
-    regime_pipeline = RegimeDetectionPipeline(n_regimes=3)
-    df_with_regime = regime_pipeline.fit_and_predict(df_features, feature_cols)
+    config = get_config()
+    regime_pipeline = RegimeDetectionPipeline(
+        n_regimes=config.regime.n_regimes,
+        algorithm=config.regime.algorithm,
+        cpd_penalty=config.regime.bayesian_penalty,
+        cpd_min_size=config.regime.bayesian_min_segment_length
+    )
+    df_with_regime = regime_pipeline.fit_and_predict(
+        df_features,
+        feature_cols,
+        signal_col=config.regime.bayesian_signal_col
+    )
     
-    logger.info(f"✓ Trained HMM model")
+    logger.info("✓ Trained %s model", config.regime.algorithm)
     logger.info(f"  Regime distribution:")
     for regime_id in range(3):
         count = (df_with_regime['regime'] == regime_id).sum()
@@ -98,7 +108,6 @@ def main():
     logger.info("\n[4/5] Per-Regime Model Training")
     logger.info("-" * 60)
     
-    config = get_config()
     trainer = RegimeModelTrainer(config=config)
     results = trainer.train_all_regimes(df_with_regime, feature_cols, target_col="energy_production")
     

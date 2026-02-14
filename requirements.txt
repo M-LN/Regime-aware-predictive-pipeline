@@ -13,6 +13,7 @@ torchvision>=0.17.0
 
 # Regime Detection & Advanced ML
 hmmlearn>=0.3.3
+ruptures>=1.1.9
 bayesian-optimization>=1.5.0
 optuna>=4.0.0
 
@@ -26,6 +27,7 @@ fastapi>=0.110.0
 uvicorn>=0.28.0
 pydantic>=2.7.0
 python-multipart>=0.0.6
+slowapi>=0.1.8
 
 # ML Experiment Tracking & Registry
 mlflow==2.8.1

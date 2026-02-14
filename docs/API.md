@@ -6,7 +6,15 @@ http://localhost:8000
 ```
 
 ## Authentication
-Currently no authentication (add in production).
+API key authentication is optional. If `API_KEY` is set, include the header:
+
+```
+X-API-Key: <your_api_key>
+```
+
+Requests without a valid key will return 401.
+
+Rate limiting may return 429 when `RATE_LIMIT` is configured.
 
 ---
 
@@ -26,6 +34,10 @@ Returns endpoint directory.
     "predict": "/predict (POST)",
     "batch_predict": "/batch_predict (POST)",
     "health": "/health (GET)",
+    "registry_status": "/registry/status (GET)",
+    "registry_models": "/registry/models (GET)",
+    "registry_health": "/registry/health (GET)",
+    "registry_reload": "/registry/reload (POST)",
     "metrics": "/metrics (GET)"
   }
 }
@@ -60,6 +72,7 @@ Check if the API is healthy and ready.
 
 ### 3. POST /predict
 **Generate Single Prediction**
+**Auth:** Requires `X-API-Key` if configured.
 
 Get a single energy production prediction with regime detection.
 
@@ -106,12 +119,30 @@ Get a single energy production prediction with regime detection.
     }
   ]
 }
+
+**Response (401 Unauthorized):**
+```json
+{
+  "error": "Invalid API key",
+  "timestamp": "2026-02-13T14:05:32.123456"
+}
+```
+
+**Response (429 Too Many Requests):**
+```json
+{
+  "error": "Rate limit exceeded",
+  "timestamp": "2026-02-13T14:05:32.123456"
+}
+```
 ```
 
 ---
 
 ### 4. POST /batch_predict
 **Generate Batch Predictions**
+**Auth:** Requires `X-API-Key` if configured.
+**Rate limit:** Returns 429 when the limit is exceeded.
 
 Get predictions for multiple data points at once.
 
@@ -180,6 +211,34 @@ Get predictions for multiple data points at once.
   "n_failed": 0
 }
 ```
+
+---
+
+### 5. GET /registry/health
+**Registry Connectivity**
+
+Checks MLflow registry connectivity and access.
+
+**Auth:** Requires `X-API-Key` if configured.
+
+**Response (200 OK):**
+```json
+{
+  "connected": true,
+  "access_ok": true,
+  "model_count": 3,
+  "timestamp": "2026-02-13T14:05:32.123456"
+}
+```
+
+---
+
+### 6. GET /registry/models
+**List Registry Models**
+
+Returns registered models and latest versions.
+
+**Auth:** Requires `X-API-Key` if configured.
 
 ---
 

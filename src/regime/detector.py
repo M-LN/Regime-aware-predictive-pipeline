@@ -3,12 +3,19 @@ Regime detection module using Hidden Markov Models
 """
 
 import logging
-from typing import Tuple, Optional, Dict
+from typing import Tuple, Optional, Dict, List
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 from hmmlearn import hmm
+
+try:
+    import ruptures as rpt
+    HAS_RUPTURES = True
+except Exception:
+    rpt = None
+    HAS_RUPTURES = False
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -153,16 +160,106 @@ class HMMRegimeDetector:
         return metadata
 
 
+class BayesianCPDRegimeDetector:
+    """
+    Detects regimes using change point detection (CPD).
+
+    Uses ruptures PELT to detect change points, then assigns regimes
+    by segment volatility.
+    """
+
+    def __init__(self, n_regimes: int = 3, penalty: float = 10.0, min_size: int = 24):
+        self.n_regimes = n_regimes
+        self.penalty = penalty
+        self.min_size = min_size
+        self.breakpoints: List[int] = []
+        self.regime_names = {
+            0: "volatile",
+            1: "neutral",
+            2: "stable",
+        }
+        self.logger = logging.getLogger(__name__)
+
+    def train(self, signal: np.ndarray) -> Tuple[np.ndarray, List[int]]:
+        if not HAS_RUPTURES:
+            raise RuntimeError("ruptures is not installed")
+
+        if signal.ndim > 1:
+            signal = signal.reshape(-1)
+
+        algo = rpt.Pelt(model="rbf", min_size=self.min_size).fit(signal)
+        breakpoints = algo.predict(pen=self.penalty)
+        self.breakpoints = breakpoints
+
+        labels = self._labels_from_breakpoints(signal, breakpoints)
+        return labels, breakpoints
+
+    def predict(self, signal: np.ndarray) -> np.ndarray:
+        if not self.breakpoints:
+            labels, _ = self.train(signal)
+            return labels
+        return self._labels_from_breakpoints(signal.reshape(-1), self.breakpoints)
+
+    def predict_proba(self, signal: np.ndarray) -> np.ndarray:
+        labels = self.predict(signal)
+        proba = np.zeros((len(labels), self.n_regimes))
+        for idx, label in enumerate(labels):
+            proba[idx, int(label)] = 1.0
+        return proba
+
+    def _labels_from_breakpoints(self, signal: np.ndarray, breakpoints: List[int]) -> np.ndarray:
+        segments = []
+        start = 0
+        for end in breakpoints:
+            segment = signal[start:end]
+            if len(segment) == 0:
+                continue
+            segments.append((start, end, float(np.std(segment))))
+            start = end
+
+        if not segments:
+            return np.zeros(len(signal), dtype=int)
+
+        # Rank segments by volatility (std) and map to regime ids
+        volatilities = np.array([seg[2] for seg in segments])
+        order = np.argsort(volatilities)
+
+        # Map lowest volatility to stable, highest to volatile
+        regime_map = {}
+        for rank, seg_idx in enumerate(order):
+            if self.n_regimes == 1:
+                regime_id = 1
+            else:
+                bucket = int(round((rank / max(len(segments) - 1, 1)) * (self.n_regimes - 1)))
+                regime_id = (self.n_regimes - 1) - bucket
+            regime_map[seg_idx] = regime_id
+
+        labels = np.zeros(len(signal), dtype=int)
+        for seg_idx, (start, end, _) in enumerate(segments):
+            labels[start:end] = regime_map.get(seg_idx, 1)
+
+        return labels
+
+
 class RegimeDetectionPipeline:
     """Orchestrates regime detection workflow"""
     
-    def __init__(self, n_regimes: int = 3):
-        self.detector = HMMRegimeDetector(n_regimes=n_regimes)
+    def __init__(self, n_regimes: int = 3, algorithm: str = "hmm", cpd_penalty: float = 10.0, cpd_min_size: int = 24):
+        self.algorithm = algorithm
+        if algorithm == "bayesian_cpd":
+            self.detector = BayesianCPDRegimeDetector(
+                n_regimes=n_regimes,
+                penalty=cpd_penalty,
+                min_size=cpd_min_size
+            )
+        else:
+            self.detector = HMMRegimeDetector(n_regimes=n_regimes)
         self.logger = logging.getLogger(__name__)
     
     def fit_and_predict(self, 
                         df: pd.DataFrame,
-                        feature_cols: list) -> pd.DataFrame:
+                        feature_cols: list,
+                        signal_col: Optional[str] = None) -> pd.DataFrame:
         """
         Fit HMM and predict regimes for DataFrame.
         
@@ -175,12 +272,21 @@ class RegimeDetectionPipeline:
         """
         # Extract features
         X = df[feature_cols].values
-        
-        # Train HMM
-        regime_labels, _ = self.detector.train(X)
-        
-        # Get probabilities
-        regime_proba = self.detector.predict_proba(X)
+
+        if self.algorithm == "bayesian_cpd":
+            if signal_col and signal_col in df.columns:
+                signal = df[signal_col].values
+            else:
+                signal = X[:, 0]
+
+            regime_labels, _ = self.detector.train(signal)
+            regime_proba = self.detector.predict_proba(signal)
+        else:
+            # Train HMM
+            regime_labels, _ = self.detector.train(X)
+            
+            # Get probabilities
+            regime_proba = self.detector.predict_proba(X)
         
         # Add to DataFrame
         df_with_regime = df.copy()
@@ -194,7 +300,11 @@ class RegimeDetectionPipeline:
             self.detector.regime_names
         )
         
-        self.logger.info(f"Regime detection complete. Unique regimes: {df_with_regime['regime'].nunique()}")
+        self.logger.info(
+            "Regime detection complete (%s). Unique regimes: %s",
+            self.algorithm,
+            df_with_regime['regime'].nunique()
+        )
         
         return df_with_regime
     

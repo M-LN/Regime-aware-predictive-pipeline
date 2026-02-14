@@ -24,6 +24,8 @@ regime:
   hmm_n_iter: 100
   hmm_random_state: 42
   bayesian_min_segment_length: 10
+  bayesian_penalty: 10.0
+  bayesian_signal_col: price
 
 # Model Configuration
 model:

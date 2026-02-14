@@ -18,6 +18,11 @@ from .mlflow_tracker import (
 
 from .drift_detector import DriftDetector
 
+from .alerting import (
+    send_webhook,
+    should_send_alert
+)
+
 from .logging import (
     StructuredLogger,
     RequestLogger,
@@ -57,5 +62,7 @@ __all__ = [
     "get_correlation_id",
     "set_correlation_id",
     "clear_correlation_id",
-    "with_correlation_id"
+    "with_correlation_id",
+    "send_webhook",
+    "should_send_alert"
 ]
