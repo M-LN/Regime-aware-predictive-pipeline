@@ -41,7 +41,7 @@
                          ┌──────────────────────────────┐
                          │🎯 Regime Detection Layer (ML)│
                          │  • Hidden Markov Models       │
-                         │  • Bayesian Change Pt. Detect │
+                         │  • Bayesian Change Pt. (plan) │
                          │  • Regime labeling & tagging  │
                          │  • Regime probability scores  │
                          │  • Metadata registry          │
@@ -54,7 +54,7 @@
                          │  • XGBoost / LSTM / RandomF.  │
                          │  • Hyperparameter tuning      │
                          │  • Cross-validation (regime)  │
-                         │  • MLflow model registry      │
+                         │  • MLflow tracking (registry) │
                          │  • Model versioning & tags    │
                          └───────────────┬──────────────┘
                                          │
@@ -84,7 +84,7 @@
                          │  • Model performance tracking │
                          │  • Data drift detection       │
                          │  • Regime drift detection     │
-                         │  • Grafana dashboards         │
+                         │  • Prometheus metrics         │
                          │  • MLflow metrics store       │
                          │  • Alert thresholds           │
                          └──────────────────────────────┘
@@ -129,10 +129,11 @@ API → Scheduler → Validation → Parquet Lake → Metadata Registry
                   [Failed Records] → Error Log
 ```
 
-**Implementation:**
-- Python scripts or Airflow DAGs
-- GitHub Actions or cron jobs for orchestration
-- Data versioning (partition by date or version number)
+**Implementation (current MVP):**
+- Python ingestion runner (`src/ingestion/run_ingestion.py`)
+- GitHub Actions scheduled workflow (`.github/workflows/ingest.yml`)
+- Parquet partitioning by date under `data/raw/`
+- Failed payload capture under `data/raw/failed/`
 
 **Why IBM cares:**
 - Shows understanding of data governance and reproducibility
@@ -197,7 +198,7 @@ regime_probs = hmm.predict_proba(features)  # Confidence scores
 - Handles uncertainty natively (probability scores)
 - Fast inference
 
-#### Option B: Bayesian Change Point Detection
+#### Option B: Bayesian Change Point Detection (Planned)
 ```python
 # Detects when regime boundaries shift
 from bayesian_blocks import bayesian_blocks
@@ -209,6 +210,8 @@ changepoints = bayesian_blocks(data)  # Identifies regime shifts
 - No need to pre-specify number of regimes
 - Statistically principled
 - Handles non-uniform sampling
+
+**Current MVP:** HMM-based regime detection is implemented; Bayesian CPD is a planned extension.
 
 **Output Structure:**
 ```json
@@ -242,7 +245,7 @@ Regime C (Volatile)  → Random Forest + Gradient Boosting
 Feature Store (regime-filtered) 
     ↓
     ├→ Train/test split (temporal, no leakage)
-    ├→ Hyperparameter tuning (GridSearchCV / Optuna)
+  ├→ Hyperparameter tuning (planned for MVP)
     ├→ Cross-validation (k-fold per regime)
     ├→ Evaluation metrics:
     │   • MAPE (Mean Absolute Percent Error)
@@ -250,16 +253,17 @@ Feature Store (regime-filtered)
     │   • MAE
     │   • R² per regime
     ↓
-MLflow Model Registry
-    ├→ model_uri: models:/energy_regime_a/production
-    ├→ tags: {"regime": "A", "version": "1.0.0", "accuracy": "0.94"}
-    ├→ metadata: training_date, feature_version, data_version
+Local Model Artifacts + MLflow Tracking
+  ├→ model_path: data/models/regime_<id>_<model>.pkl|.keras
+  ├→ tags/params/metrics logged to MLflow (tracking)
+  ├→ registry promotion (planned)
 ```
 
 **Key Details:**
 - **No data leakage**: Use temporal split (train before test date)
 - **Regime-specific metrics**: Track accuracy per regime, not global
 - **Retraining schedule**: Monthly or on drift detection signal
+- **Current MVP**: Fixed hyperparameters; MLflow registry promotion planned
 
 ---
 
@@ -301,15 +305,15 @@ New Energy Data Point
     └──────────────────────┘
 ```
 
-**API Endpoint (FastAPI):**
+**API Endpoint (FastAPI, MVP):**
 ```python
 @app.post("/predict")
 async def predict(input_data: EnergyDataPoint):
     # Detect regime
     regime = regime_detector.predict(input_data.features)
     
-    # Load regime-specific model
-    model = mlflow.pyfunc.load_model(f"models:/regime_{regime}/production")
+  # Load regime-specific model (local artifacts)
+  model = local_model_registry.load(regime)
     
     # Generate prediction
     pred = model.predict([input_data.features])
@@ -328,6 +332,8 @@ async def predict(input_data: EnergyDataPoint):
         "model_version": "1.0.0"
     }
 ```
+
+  **Current MVP:** Models are loaded from `data/models/` at startup; MLflow registry loading is planned.
 
 **Advantages:**
 - **Low latency**: Simple model selection logic
@@ -449,7 +455,9 @@ spec:
 • Regime probability confidence (sudden drops = suspicious)
 ```
 
-**Monitoring Dashboard (Grafana):**
+**MVP Metrics Export:** Prometheus-compatible `/metrics` endpoint from the FastAPI service.
+
+**Monitoring Dashboard (Planned):**
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -475,7 +483,7 @@ spec:
 └─────────────────────────────────────────────────┘
 ```
 
-**MLflow Integration:**
+**MLflow Integration (Tracking):**
 ```python
 # Log metrics to MLflow
 mlflow.log_metric("mape_regime_a", 0.023)
@@ -488,12 +496,14 @@ mlflow.set_tag("last_retrained", "2026-02-13")
 mlflow.set_tag("regime_count", "3")
 ```
 
-**Alert Conditions:**
+**Alert Conditions (Planned):**
 ```
 • MAPE > 8% for any regime       → Investigate data
 • Inference latency > 200ms      → Check system load
 • Drift score > 0.5              → Trigger retraining
 • Regime transition freq unusual → Check input data quality
+
+**Current MVP:** Drift detection and MLflow tracking are implemented; Grafana dashboards and alerting are planned.
 ```
 
 ---
