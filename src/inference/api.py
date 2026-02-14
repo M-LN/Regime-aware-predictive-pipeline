@@ -413,7 +413,7 @@ async def registry_health():
 
 @limiter.limit(os.getenv("RATE_LIMIT", "60/minute"))
 @app.post("/registry/reload", tags=["monitoring"], dependencies=[Depends(_require_api_key)])
-async def registry_reload():
+async def registry_reload(request: Request):
     """
     Reload registry models without restarting the API.
     """
@@ -465,7 +465,7 @@ async def health_check():
 
 @limiter.limit(os.getenv("RATE_LIMIT", "60/minute"))
 @app.post("/predict", response_model=PredictionResponse, tags=["prediction"], dependencies=[Depends(_require_api_key)])
-async def predict(data: EnergyDataPoint) -> PredictionResponse:
+async def predict(request: Request, data: EnergyDataPoint) -> PredictionResponse:
     """
     Generate a single prediction with regime detection.
     
@@ -669,12 +669,12 @@ async def predict(data: EnergyDataPoint) -> PredictionResponse:
 
 @limiter.limit(os.getenv("RATE_LIMIT", "60/minute"))
 @app.post("/batch_predict", response_model=BatchPredictionResponse, tags=["prediction"], dependencies=[Depends(_require_api_key)])
-async def batch_predict(request: BatchPredictionRequest) -> BatchPredictionResponse:
+async def batch_predict(request: Request, batch_request: BatchPredictionRequest) -> BatchPredictionResponse:
     """
     Generate batch predictions.
     
     Args:
-        request: Batch prediction request with array of data points
+        batch_request: Batch prediction request with array of data points
     
     Returns:
         Array of predictions with success/failure counts
@@ -682,7 +682,7 @@ async def batch_predict(request: BatchPredictionRequest) -> BatchPredictionRespo
     predictions = []
     n_failed = 0
     
-    for data_point in request.data:
+    for data_point in batch_request.data:
         try:
             pred = await predict(data_point)
             predictions.append(pred)
