@@ -5,6 +5,7 @@ Run data ingestion for a given time range.
 import argparse
 from datetime import datetime, timedelta
 import os
+import json
 import logging
 import pandas as pd
 
@@ -34,6 +35,23 @@ def _build_fetcher(config) -> object:
     if not base_url:
         return MockEnergyDataFetcher()
 
+    field_map = None
+    extra_params = None
+
+    field_map_raw = os.getenv("EDS_FIELD_MAP")
+    if field_map_raw:
+        try:
+            field_map = json.loads(field_map_raw)
+        except Exception as e:
+            logger.warning("Invalid EDS_FIELD_MAP JSON: %s", e)
+
+    extra_params_raw = os.getenv("EDS_EXTRA_PARAMS")
+    if extra_params_raw:
+        try:
+            extra_params = json.loads(extra_params_raw)
+        except Exception as e:
+            logger.warning("Invalid EDS_EXTRA_PARAMS JSON: %s", e)
+
     return EnergiDataServiceFetcher(
         base_url=base_url,
         api_key=os.getenv("EDS_API_KEY"),
@@ -44,6 +62,8 @@ def _build_fetcher(config) -> object:
         timestamp_field=os.getenv("EDS_TIMESTAMP_FIELD", "timestamp"),
         start_param=os.getenv("EDS_START_PARAM", "start"),
         end_param=os.getenv("EDS_END_PARAM", "end"),
+        field_map=field_map,
+        extra_params=extra_params,
     )
 
 

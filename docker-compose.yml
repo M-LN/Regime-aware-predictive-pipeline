@@ -16,6 +16,7 @@ services:
       - ./config.yaml:/app/config.yaml
     depends_on:
       - mlflow
+      - prometheus
     command: uvicorn src.inference.api:app --host 0.0.0.0 --port 8000 --reload
 
   # MLflow Tracking Server
@@ -30,6 +31,23 @@ services:
       - BACKEND_STORE_URI=file:///mlflow_backend
       - DEFAULT_ARTIFACT_ROOT=/root/mlruns
     command: mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri file:///mlflow_backend
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command: --config.file=/etc/prometheus/prometheus.yml
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
 
   # PostgreSQL for MLflow (optional, for scalability)
   # postgres:
@@ -46,6 +64,7 @@ services:
 volumes:
   mlruns:
   mlflow_backend:
+  grafana_data:
   # postgres_data:
 
 networks:

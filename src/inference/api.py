@@ -318,6 +318,7 @@ async def root():
             "batch_predict": "/batch_predict (POST)",
             "health": "/health (GET)",
             "registry_status": "/registry/status (GET)",
+            "registry_models": "/registry/models (GET)",
             "registry_reload": "/registry/reload (POST)",
             "metrics": "/metrics (GET)"
         }
@@ -343,6 +344,22 @@ async def registry_status():
         "registry_enabled": registry_enabled,
         "registry_stage": registry_stage,
         "models_loaded": model_sources,
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+
+@app.get("/registry/models", tags=["monitoring"])
+async def registry_models():
+    """
+    List MLflow registry models and latest versions.
+    """
+    if not app_state.mlflow_tracker or not app_state.mlflow_tracker.is_connected():
+        raise HTTPException(status_code=503, detail="MLflow tracker not connected")
+
+    models = app_state.mlflow_tracker.list_registry_models()
+    return {
+        "models": models or [],
+        "count": len(models or []),
         "timestamp": datetime.utcnow().isoformat()
     }
 

@@ -319,6 +319,38 @@ class MLflowTracker:
             logger.warning("Failed to load model from registry %s (%s): %s", model_name, stage, e)
             return None
 
+    def list_registry_models(self) -> Optional[list]:
+        """
+        List registered models and their latest versions.
+
+        Returns:
+            List of model metadata dicts or None if unavailable
+        """
+        if not self.enabled or self.client is None:
+            return None
+
+        try:
+            models = []
+            for model in self.client.search_registered_models():
+                latest_versions = []
+                for version in model.latest_versions or []:
+                    latest_versions.append({
+                        "version": version.version,
+                        "stage": version.current_stage,
+                        "status": version.status,
+                        "run_id": version.run_id,
+                    })
+
+                models.append({
+                    "name": model.name,
+                    "latest_versions": latest_versions,
+                })
+
+            return models
+        except Exception as e:
+            logger.warning("Failed to list registry models: %s", e)
+            return None
+
 
 class _DummyContext:
     """Dummy context manager for when MLflow is disabled"""
