@@ -25,12 +25,12 @@ services:
     ports:
       - "5000:5000"
     volumes:
-      - ./mlruns:/root/mlruns
-      - ./mlflow_backend:/mlflow_backend
+      - ./mlruns:/mlflow
+      - ./mlflow.db:/mlflow/mlflow.db
     environment:
-      - BACKEND_STORE_URI=file:///mlflow_backend
-      - DEFAULT_ARTIFACT_ROOT=/root/mlruns
-    command: mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri file:///mlflow_backend
+      - MLFLOW_BACKEND_STORE_URI=sqlite:////mlflow/mlflow.db
+      - MLFLOW_DEFAULT_ARTIFACT_ROOT=/mlflow
+    command: mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:////mlflow/mlflow.db
 
   prometheus:
     image: prom/prometheus:latest
