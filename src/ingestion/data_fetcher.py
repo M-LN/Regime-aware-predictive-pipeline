@@ -172,7 +172,25 @@ class EnergiDataServiceFetcher(DataFetcher):
 
         merged = None
         if energy is not None and prices is not None:
-            merged = pd.merge(energy, prices, on="timestamp", how="inner")
+            nearest_join = os.getenv("INGEST_NEAREST_JOIN", "true").lower() == "true"
+            tolerance_raw = os.getenv("INGEST_NEAREST_TOLERANCE_MINUTES", "60")
+            try:
+                tolerance_minutes = int(tolerance_raw)
+            except ValueError:
+                tolerance_minutes = 60
+
+            if nearest_join:
+                energy_sorted = energy.sort_values("timestamp")
+                price_sorted = prices.sort_values("timestamp")
+                merged = pd.merge_asof(
+                    energy_sorted,
+                    price_sorted,
+                    on="timestamp",
+                    direction="nearest",
+                    tolerance=pd.Timedelta(minutes=tolerance_minutes),
+                )
+            else:
+                merged = pd.merge(energy, prices, on="timestamp", how="inner")
         elif energy is not None:
             merged = energy
         elif prices is not None:
