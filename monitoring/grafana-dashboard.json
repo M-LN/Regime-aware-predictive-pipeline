@@ -1,0 +1,62 @@
+{
+  "uid": "regime-ai",
+  "title": "Regime-Aware Prediction - MVP",
+  "timezone": "browser",
+  "schemaVersion": 36,
+  "version": 1,
+  "refresh": "10s",
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Prediction Requests (rate)",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(rate(prediction_requests_total[5m])) by (status)",
+          "legendFormat": "{{status}}"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Prediction Latency p95 (s)",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(prediction_latency_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Regime Distribution (rate)",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(rate(regime_distribution_total[5m])) by (regime_name)",
+          "legendFormat": "{{regime_name}}"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Prediction Errors (rate)",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(rate(prediction_errors_total[5m])) by (error_type)",
+          "legendFormat": "{{error_type}}"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+    }
+  ]
+}

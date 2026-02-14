@@ -317,8 +317,63 @@ async def root():
             "predict": "/predict (POST)",
             "batch_predict": "/batch_predict (POST)",
             "health": "/health (GET)",
+            "registry_status": "/registry/status (GET)",
+            "registry_reload": "/registry/reload (POST)",
             "metrics": "/metrics (GET)"
         }
+    }
+
+
+@app.get("/registry/status", tags=["monitoring"])
+async def registry_status():
+    """
+    Report MLflow registry configuration and loaded models per regime.
+    """
+    registry_enabled = os.getenv("MLFLOW_REGISTRY_ENABLED", "false").lower() == "true"
+    registry_stage = os.getenv("MLFLOW_REGISTRY_STAGE", "Production")
+
+    model_sources = {}
+    for regime_id, entry in app_state.regime_models.items():
+        model_sources[str(regime_id)] = {
+            "name": entry.get("name", "unknown"),
+            "type": entry.get("type", "unknown"),
+        }
+
+    return {
+        "registry_enabled": registry_enabled,
+        "registry_stage": registry_stage,
+        "models_loaded": model_sources,
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+
+@app.post("/registry/reload", tags=["monitoring"])
+async def registry_reload():
+    """
+    Reload registry models without restarting the API.
+    """
+    if not app_state.mlflow_tracker or not app_state.mlflow_tracker.is_connected():
+        raise HTTPException(status_code=503, detail="MLflow tracker not connected")
+
+    registry_enabled = os.getenv("MLFLOW_REGISTRY_ENABLED", "false").lower() == "true"
+    if not registry_enabled:
+        raise HTTPException(status_code=400, detail="MLflow registry not enabled")
+
+    registry_stage = os.getenv("MLFLOW_REGISTRY_STAGE", "Production")
+    registry_models = _load_registry_models(app_state.mlflow_tracker, registry_stage)
+
+    if registry_models:
+        app_state.regime_models.update(registry_models)
+
+    model_info = {rid: entry["name"] for rid, entry in app_state.regime_models.items()}
+    set_api_info("1.0.0", app_state.config.regime.n_regimes, model_info)
+    set_models_loaded(len(app_state.regime_models))
+
+    return {
+        "registry_stage": registry_stage,
+        "models_reloaded": list(registry_models.keys()),
+        "models_loaded": model_info,
+        "timestamp": datetime.utcnow().isoformat()
     }
 
 
