@@ -245,7 +245,7 @@ Regime C (Volatile)  → Random Forest + Gradient Boosting
 Feature Store (regime-filtered) 
     ↓
     ├→ Train/test split (temporal, no leakage)
-  ├→ Hyperparameter tuning (planned for MVP)
+    ├→ Hyperparameter tuning (planned for MVP)
     ├→ Cross-validation (k-fold per regime)
     ├→ Evaluation metrics:
     │   • MAPE (Mean Absolute Percent Error)
@@ -312,8 +312,8 @@ async def predict(input_data: EnergyDataPoint):
     # Detect regime
     regime = regime_detector.predict(input_data.features)
     
-  # Load regime-specific model (local artifacts)
-  model = local_model_registry.load(regime)
+    # Load regime-specific model (local artifacts)
+    model = local_model_registry.load(regime)
     
     # Generate prediction
     pred = model.predict([input_data.features])
@@ -333,7 +333,7 @@ async def predict(input_data: EnergyDataPoint):
     }
 ```
 
-  **Current MVP:** Models are loaded from `data/models/` at startup; MLflow registry loading is planned.
+**Current MVP:** Models are loaded from `data/models/` at startup; MLflow registry loading is planned.
 
 **Advantages:**
 - **Low latency**: Simple model selection logic
@@ -497,14 +497,12 @@ mlflow.set_tag("regime_count", "3")
 ```
 
 **Alert Conditions (Planned):**
-```
-• MAPE > 8% for any regime       → Investigate data
-• Inference latency > 200ms      → Check system load
-• Drift score > 0.5              → Trigger retraining
-• Regime transition freq unusual → Check input data quality
+- MAPE > 8% for any regime → Investigate data
+- Inference latency > 200ms → Check system load
+- Drift score > 0.5 → Trigger retraining
+- Regime transition freq unusual → Check input data quality
 
 **Current MVP:** Drift detection and MLflow tracking are implemented; Grafana dashboards and alerting are planned.
-```
 
 ---
 
