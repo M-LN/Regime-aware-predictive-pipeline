@@ -10,7 +10,7 @@ Detects:
 import logging
 from typing import Dict, List, Optional, Tuple
 from collections import deque
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 import numpy as np
 from scipy import stats
 from scipy.spatial import distance
@@ -59,7 +59,7 @@ class DriftDetector:
         
         # Drift alerts
         self.drift_alerts: List[Dict] = []
-        self.last_check_time = datetime.utcnow()
+        self.last_check_time = datetime.now(UTC)
     
     def update_features(self, features: Dict[str, float]) -> None:
         """
@@ -126,7 +126,7 @@ class DriftDetector:
             Dictionary with drift detection results
         """
         results = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "drift_detected": False,
             "feature_drift": {},
             "prediction_drift": None,
@@ -202,7 +202,7 @@ class DriftDetector:
         if auto_update_reference and not results["drift_detected"]:
             self.set_reference_distributions()
         
-        self.last_check_time = datetime.utcnow()
+        self.last_check_time = datetime.now(UTC)
         return results
     
     def _detect_feature_drift(
@@ -366,7 +366,7 @@ class DriftDetector:
         Returns:
             List of recent alerts
         """
-        cutoff = datetime.utcnow() - timedelta(hours=hours)
+        cutoff = datetime.now(UTC) - timedelta(hours=hours)
         return [alert for alert in self.drift_alerts 
                 if datetime.fromisoformat(alert.get("timestamp", "2000-01-01")) > cutoff]
     

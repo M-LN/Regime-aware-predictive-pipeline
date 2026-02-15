@@ -4,7 +4,7 @@ Integration tests for the API
 
 import pytest
 from fastapi.testclient import TestClient
-from datetime import datetime
+from datetime import datetime, UTC
 
 from src.inference.api import app
 
@@ -54,7 +54,7 @@ class TestAPIEndpoints:
             "energy_production": 400.0,
             "temperature": 12.0,
             "price": 150.0,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(UTC).isoformat()
         }
         
         response = client.post("/predict", json=payload)

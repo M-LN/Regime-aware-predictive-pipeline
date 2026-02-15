@@ -4,7 +4,7 @@ FastAPI inference server for regime-aware predictions
 
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Optional, List, Dict
 from pathlib import Path
 from contextlib import asynccontextmanager
@@ -121,7 +121,7 @@ def _rate_limit_handler(request: Request, exc: RateLimitExceeded):
         status_code=429,
         content={
             "error": "Rate limit exceeded",
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(UTC).isoformat()
         }
     )
 
@@ -373,7 +373,7 @@ async def registry_status():
         "registry_enabled": registry_enabled,
         "registry_stage": registry_stage,
         "models_loaded": model_sources,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(UTC).isoformat()
     }
 
 
@@ -389,7 +389,7 @@ async def registry_models():
     return {
         "models": models or [],
         "count": len(models or []),
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(UTC).isoformat()
     }
 
 
@@ -407,7 +407,7 @@ async def registry_health():
         "connected": True,
         "access_ok": access_ok,
         "model_count": len(models or []),
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(UTC).isoformat()
     }
 
 
@@ -438,7 +438,7 @@ async def registry_reload(request: Request):
         "registry_stage": registry_stage,
         "models_reloaded": list(registry_models.keys()),
         "models_loaded": model_info,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(UTC).isoformat()
     }
 
 
@@ -459,7 +459,7 @@ async def health_check():
         regime_detector="loaded" if app_state.regime_pipeline else "not_loaded",
         models_loaded=len(app_state.regime_models),
         mlflow_connected=mlflow_connected,
-        timestamp=datetime.utcnow().isoformat()
+        timestamp=datetime.now(UTC).isoformat()
     )
 
 
@@ -475,7 +475,7 @@ async def predict(request: Request, data: EnergyDataPoint) -> PredictionResponse
     Returns:
         Prediction with regime information
     """
-    start_time = datetime.utcnow()
+    start_time = datetime.now(UTC)
     
     # Initialize metrics tracker and loggers
     metrics_tracker = MetricsTracker()
@@ -556,7 +556,7 @@ async def predict(request: Request, data: EnergyDataPoint) -> PredictionResponse
             model_name = "mock"
             base_pred = data.energy_production * 1.05 + np.random.normal(0, 10)
         
-        latency_ms = (datetime.utcnow() - start_time).total_seconds() * 1000
+        latency_ms = (datetime.now(UTC) - start_time).total_seconds() * 1000
         
         # Record metrics
         model_type = model_entry.get("type", "mock") if model_entry else "mock"
@@ -598,7 +598,7 @@ async def predict(request: Request, data: EnergyDataPoint) -> PredictionResponse
         # Auto-check drift at configured intervals
         if app_state.drift_detector and app_state.drift_auto_check_enabled:
             try:
-                now = datetime.utcnow()
+                now = datetime.now(UTC)
                 if app_state.last_drift_check is None or (
                     now - app_state.last_drift_check
                 ).total_seconds() >= app_state.drift_check_interval_seconds:
@@ -654,7 +654,7 @@ async def predict(request: Request, data: EnergyDataPoint) -> PredictionResponse
             regime_confidence=float(confidence),
             model_name=model_name,
             inference_latency_ms=float(latency_ms),
-            timestamp=datetime.utcnow().isoformat()
+            timestamp=datetime.now(UTC).isoformat()
         )
     
     except Exception as e:
@@ -739,7 +739,7 @@ async def status():
             "drift_detector": drift_status,
             "prometheus_metrics": "enabled"
         },
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(UTC).isoformat()
     }
 
 
@@ -775,7 +775,7 @@ async def set_drift_reference():
         return {
             "message": "Reference distributions updated",
             "status": status,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(UTC).isoformat()
         }
     except Exception as e:
         logger.error(f"Failed to set reference: {e}")
@@ -798,7 +798,7 @@ async def get_drift_alerts(hours: int = 24):
         "alerts": alerts,
         "count": len(alerts),
         "hours": hours,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(UTC).isoformat()
     }
 
 
@@ -813,7 +813,7 @@ async def get_last_drift_check():
     return {
         "last_check": app_state.last_drift_check.isoformat() if app_state.last_drift_check else None,
         "last_result": app_state.last_drift_result,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(UTC).isoformat()
     }
 
 
@@ -828,7 +828,7 @@ async def http_exception_handler(request, exc):
         status_code=exc.status_code,
         content={
             "error": exc.detail,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(UTC).isoformat()
         }
     )
 
@@ -840,7 +840,7 @@ async def value_error_handler(request, exc):
         status_code=422,
         content={
             "error": str(exc),
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(UTC).isoformat()
         }
     )
 
