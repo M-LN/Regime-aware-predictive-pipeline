@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Regime-Aware Prediction API - Quick Access</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 900px;
+            margin: 50px auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            color: #333;
+        }
+        h1 {
+            color: #667eea;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .section {
+            margin: 25px 0;
+            padding: 20px;
+            border-left: 4px solid #667eea;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+        .section h2 {
+            color: #667eea;
+            margin-top: 0;
+        }
+        .link-button {
+            display: inline-block;
+            padding: 12px 25px;
+            margin: 10px 10px 10px 0;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            transition: background 0.3s;
+            font-weight: 500;
+        }
+        .link-button:hover {
+            background: #764ba2;
+        }
+        .link-button.secondary {
+            background: #48bb78;
+        }
+        .link-button.secondary:hover {
+            background: #38a169;
+        }
+        code {
+            background: #2d3748;
+            color: #48bb78;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+        .code-block {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+        .feature {
+            display: inline-block;
+            padding: 5px 12px;
+            margin: 5px;
+            background: #e6fffa;
+            color: #234e52;
+            border-radius: 15px;
+            font-size: 0.9em;
+        }
+        .status {
+            display: inline-block;
+            padding: 5px 12px;
+            background: #48bb78;
+            color: white;
+            border-radius: 15px;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Regime-Aware Prediction API</h1>
+        <p class="subtitle">
+            <span class="status">● LIVE</span> 
+            Energy Market Forecasting with Intelligent Regime Detection
+        </p>
+
+        <div class="section">
+            <h2>📖 Interactive Documentation</h2>
+            <p>The easiest way to explore and test the API:</p>
+            <a href="http://127.0.0.1:8002/docs" class="link-button" target="_blank">
+                🔍 Open Swagger UI
+            </a>
+            <a href="http://127.0.0.1:8002/redoc" class="link-button secondary" target="_blank">
+                📚 Open ReDoc
+            </a>
+        </div>
+
+        <div class="section">
+            <h2>🔗 Quick Links (No Authentication Required)</h2>
+            <a href="http://127.0.0.1:8002/" class="link-button">API Info</a>
+            <a href="http://127.0.0.1:8002/health" class="link-button">Health Check</a>
+            <a href="http://127.0.0.1:8002/status" class="link-button">System Status</a>
+            <a href="http://127.0.0.1:8002/metrics" class="link-button">Prometheus Metrics</a>
+        </div>
+
+        <div class="section">
+            <h2>🔐 Authentication for Protected Endpoints</h2>
+            <p>For endpoints like <code>/predict</code>, include this header:</p>
+            <div class="code-block">X-API-Key: dev-key-12345</div>
+            
+            <p><strong>Example with curl:</strong></p>
+            <div class="code-block">
+curl -X POST http://127.0.0.1:8002/predict \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: dev-key-12345" \
+  -d '{
+    "wind_speed": 7.5,
+    "energy_production": 220.0,
+    "temperature": 12.0,
+    "price": 250.0
+  }'
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>✨ Features</h2>
+            <span class="feature">🎯 Regime Detection (HMM)</span>
+            <span class="feature">🤖 Multi-Model Routing</span>
+            <span class="feature">📊 Feature Engineering (112 features)</span>
+            <span class="feature">📈 MLflow Tracking</span>
+            <span class="feature">🔔 Drift Detection</span>
+            <span class="feature">⚡ Real-time Predictions</span>
+        </div>
+
+        <div class="section">
+            <h2>🧪 Test the API</h2>
+            <p>Run the test script from your terminal:</p>
+            <div class="code-block">python test_prediction.py</div>
+        </div>
+
+        <div class="section">
+            <h2>📊 Available Models</h2>
+            <ul>
+                <li><strong>Regime 0 (High Wind):</strong> XGBoost Regressor</li>
+                <li><strong>Regime 1 (Neutral):</strong> LSTM Neural Network</li>
+                <li><strong>Regime 2 (Low Wind):</strong> Random Forest</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
