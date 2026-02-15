@@ -4,7 +4,7 @@ Feature engineering module for computing and managing features
 
 import logging
 from typing import List, Dict, Optional
-from datetime import datetime
+from datetime import datetime, UTC
 
 import numpy as np
 import pandas as pd
@@ -234,7 +234,7 @@ class FeatureStore:
         """
         try:
             file_path = (self.storage_path / 
-                        f"{feature_set_name}_v{version}_{datetime.utcnow().isoformat()}.parquet")
+                        f"{feature_set_name}_v{version}_{datetime.now(UTC).isoformat()}.parquet")
             
             df.to_parquet(file_path, engine='pyarrow', index=False)
             
@@ -245,7 +245,7 @@ class FeatureStore:
                 'n_samples': len(df),
                 'n_features': len(df.columns),
                 'columns': df.columns.tolist(),
-                'created_at': datetime.utcnow().isoformat()
+                'created_at': datetime.now(UTC).isoformat()
             }
             
             self.logger.info(f"Saved features v{version}: {file_path}")

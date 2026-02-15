@@ -11,7 +11,7 @@ Provides:
 import logging
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Optional, Dict, Any
 from contextvars import ContextVar
 from functools import wraps
@@ -55,7 +55,7 @@ class StructuredLogger:
             Structured log dictionary
         """
         log_dict = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "level": level,
             "logger": self.name,
             "message": message,
@@ -183,7 +183,7 @@ class RequestLogger:
         else:
             get_correlation_id()  # Generate if needed
         
-        self.start_time = datetime.utcnow()
+        self.start_time = datetime.now(UTC)
         
         self.logger.info(
             "Request started",
@@ -207,7 +207,7 @@ class RequestLogger:
             extra: Optional extra fields
         """
         if self.start_time:
-            duration_ms = (datetime.utcnow() - self.start_time).total_seconds() * 1000
+            duration_ms = (datetime.now(UTC) - self.start_time).total_seconds() * 1000
         else:
             duration_ms = None
         
@@ -311,7 +311,7 @@ class PerformanceLogger:
     
     def start_timer(self, name: str):
         """Start a named timer"""
-        self.timers[name] = datetime.utcnow()
+        self.timers[name] = datetime.now(UTC)
     
     def end_timer(self, name: str, extra: Optional[Dict[str, Any]] = None):
         """
@@ -324,7 +324,7 @@ class PerformanceLogger:
         if name not in self.timers:
             return
         
-        duration_ms = (datetime.utcnow() - self.timers[name]).total_seconds() * 1000
+        duration_ms = (datetime.now(UTC) - self.timers[name]).total_seconds() * 1000
         
         log_data = {
             "operation": name,
