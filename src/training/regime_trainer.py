@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 try:
     import xgboost as xgb
+
     HAS_XGBOOST = True
 except Exception:
     xgb = None
@@ -28,6 +29,7 @@ except Exception:
 
 try:
     from tensorflow import keras
+
     HAS_TF = True
 except Exception:
     keras = None
@@ -138,29 +140,35 @@ class RegimeModelTrainer:
                     "model_name": model_name,
                     "regime_id": regime_id,
                     "test_size": self.config.model.test_size,
-                    "random_state": self.config.model.random_state
+                    "random_state": self.config.model.random_state,
                 }
-                
+
                 # Add model-specific params
                 if model_name == "xgboost":
-                    params.update({
-                        "max_depth": self.config.model.xgb_max_depth,
-                        "learning_rate": self.config.model.xgb_learning_rate,
-                        "n_estimators": self.config.model.xgb_n_estimators
-                    })
+                    params.update(
+                        {
+                            "max_depth": self.config.model.xgb_max_depth,
+                            "learning_rate": self.config.model.xgb_learning_rate,
+                            "n_estimators": self.config.model.xgb_n_estimators,
+                        }
+                    )
                 elif model_name == "lstm":
-                    params.update({
-                        "lstm_units": self.config.model.lstm_units,
-                        "lstm_dropout": self.config.model.lstm_dropout,
-                        "lstm_epochs": self.config.model.lstm_epochs,
-                        "lstm_batch_size": self.config.model.lstm_batch_size
-                    })
+                    params.update(
+                        {
+                            "lstm_units": self.config.model.lstm_units,
+                            "lstm_dropout": self.config.model.lstm_dropout,
+                            "lstm_epochs": self.config.model.lstm_epochs,
+                            "lstm_batch_size": self.config.model.lstm_batch_size,
+                        }
+                    )
                 elif model_name == "random_forest":
-                    params.update({
-                        "n_estimators": self.config.model.rf_n_estimators,
-                        "max_depth": self.config.model.rf_max_depth
-                    })
-                
+                    params.update(
+                        {
+                            "n_estimators": self.config.model.rf_n_estimators,
+                            "max_depth": self.config.model.rf_max_depth,
+                        }
+                    )
+
                 mlflow_tracker.log_training_run(
                     regime_id=regime_id,
                     model_name=model_name,
@@ -168,9 +176,11 @@ class RegimeModelTrainer:
                     model_type="keras" if is_keras else "sklearn",
                     metrics={"mae": mae, "rmse": rmse},
                     params=params,
-                    n_samples=n_samples
+                    n_samples=n_samples,
                 )
-                self.logger.info("Logged training run to MLflow for regime %s", regime_id)
+                self.logger.info(
+                    "Logged training run to MLflow for regime %s", regime_id
+                )
             except Exception as e:
                 self.logger.warning("Failed to log to MLflow: %s", e)
 
@@ -214,7 +224,10 @@ class RegimeModelTrainer:
             model = keras.Sequential(
                 [
                     keras.layers.Input(shape=(1, input_dim)),
-                    keras.layers.LSTM(self.config.model.lstm_units, dropout=self.config.model.lstm_dropout),
+                    keras.layers.LSTM(
+                        self.config.model.lstm_units,
+                        dropout=self.config.model.lstm_dropout,
+                    ),
                     keras.layers.Dense(1),
                 ]
             )
@@ -230,17 +243,34 @@ class RegimeModelTrainer:
             return model, False
 
         if model_name == "xgboost":
-            self.logger.warning("XGBoost not available; using HistGradientBoostingRegressor")
-            return HistGradientBoostingRegressor(random_state=self.config.model.random_state), False
+            self.logger.warning(
+                "XGBoost not available; using HistGradientBoostingRegressor"
+            )
+            return (
+                HistGradientBoostingRegressor(
+                    random_state=self.config.model.random_state
+                ),
+                False,
+            )
 
         if model_name == "lstm":
             self.logger.warning("TensorFlow not available; using MLPRegressor")
-            return MLPRegressor(hidden_layer_sizes=(64, 32), random_state=self.config.model.random_state), False
+            return (
+                MLPRegressor(
+                    hidden_layer_sizes=(64, 32),
+                    random_state=self.config.model.random_state,
+                ),
+                False,
+            )
 
-        self.logger.warning("Unknown model '%s'; using RandomForestRegressor", model_name)
+        self.logger.warning(
+            "Unknown model '%s'; using RandomForestRegressor", model_name
+        )
         return RandomForestRegressor(random_state=self.config.model.random_state), False
 
-    def _save_model(self, model, model_name: str, regime_id: int, is_keras: bool) -> str:
+    def _save_model(
+        self, model, model_name: str, regime_id: int, is_keras: bool
+    ) -> str:
         filename = f"regime_{regime_id}_{model_name}"
         if is_keras:
             path = self.model_dir / f"{filename}.keras"

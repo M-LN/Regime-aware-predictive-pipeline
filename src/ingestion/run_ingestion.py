@@ -20,7 +20,6 @@ from src.ingestion.data_fetcher import (
     CompositeDataFetcher,
 )
 
-
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
@@ -114,7 +113,9 @@ def _build_fetcher(config) -> object:
         latitude=float(os.getenv("WEATHER_LATITUDE", "55.6761")),
         longitude=float(os.getenv("WEATHER_LONGITUDE", "12.5683")),
         timezone=os.getenv("WEATHER_TIMEZONE", "Europe/Copenhagen"),
-        hourly_fields=os.getenv("WEATHER_HOURLY_FIELDS", "temperature_2m,wind_speed_10m").split(","),
+        hourly_fields=os.getenv(
+            "WEATHER_HOURLY_FIELDS", "temperature_2m,wind_speed_10m"
+        ).split(","),
         timeout=int(os.getenv("WEATHER_TIMEOUT", "30")),
     )
 
@@ -203,7 +204,9 @@ def main() -> None:
         latest_timestamp = _get_latest_eds_timestamp()
         if latest_timestamp is not None:
             end_time = latest_timestamp
-            logger.info("Using latest available EDS price timestamp: %s", end_time.isoformat())
+            logger.info(
+                "Using latest available EDS price timestamp: %s", end_time.isoformat()
+            )
         else:
             end_time = datetime.utcnow()
 
@@ -213,14 +216,18 @@ def main() -> None:
             raise ValueError("Invalid --start timestamp")
         start_time = start_time.to_pydatetime()
     else:
-        lookback_hours = args.lookback_hours or int(os.getenv("INGEST_LOOKBACK_HOURS", "24"))
+        lookback_hours = args.lookback_hours or int(
+            os.getenv("INGEST_LOOKBACK_HOURS", "24")
+        )
         start_time = end_time - timedelta(hours=lookback_hours)
 
     weather_base_url = os.getenv("WEATHER_BASE_URL", "")
     if weather_base_url and "forecast" in weather_base_url.lower():
         today = datetime.utcnow().date()
         if end_time.date() < today:
-            os.environ["WEATHER_BASE_URL"] = "https://archive-api.open-meteo.com/v1/archive"
+            os.environ["WEATHER_BASE_URL"] = (
+                "https://archive-api.open-meteo.com/v1/archive"
+            )
             logger.info("Switching to Open-Meteo archive for historical window")
 
     fetcher = _build_fetcher(config)
@@ -238,7 +245,9 @@ def main() -> None:
         return
 
     pipeline.save_parquet(df, date=end_time)
-    logger.info("Ingestion completed for %s to %s", start_time.isoformat(), end_time.isoformat())
+    logger.info(
+        "Ingestion completed for %s to %s", start_time.isoformat(), end_time.isoformat()
+    )
 
 
 if __name__ == "__main__":
