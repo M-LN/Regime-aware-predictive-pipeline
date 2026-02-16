@@ -6,7 +6,7 @@ import logging
 import json
 import os
 from abc import ABC, abstractmethod
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Dict, List, Optional, Any
 
 import pandas as pd
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 class DataFetcher(ABC):
     """Abstract base class for data fetchers"""
-    
+
     @abstractmethod
     def fetch(self, start_date: datetime, end_date: datetime) -> pd.DataFrame:
         """Fetch data for given date range"""
@@ -30,60 +30,64 @@ class MockEnergyDataFetcher(DataFetcher):
     Mock data fetcher for testing and development.
     Generates synthetic energy data with realistic patterns.
     """
-    
+
     def __init__(self):
         self.logger = logging.getLogger(__name__)
-    
+
     def fetch(self, start_date: datetime, end_date: datetime) -> pd.DataFrame:
         """
         Generate synthetic energy data.
-        
+
         Args:
             start_date: Start date for data
             end_date: End date for data
-        
+
         Returns:
-            DataFrame with columns: timestamp, wind_speed, energy_production, 
+            DataFrame with columns: timestamp, wind_speed, energy_production,
                                    temperature, price
         """
         import numpy as np
-        
+
         # Create hourly timestamps
-        timestamps = pd.date_range(start=start_date, end=end_date, freq='h')
+        timestamps = pd.date_range(start=start_date, end=end_date, freq="h")
         n = len(timestamps)
-        
+
         # Generate synthetic data with realistic patterns
         np.random.seed(42)
-        
+
         # Wind speed (m/s) - varies with seasonal patterns
         wind_base = 6 + 2 * np.sin(np.arange(n) / 168)  # Weekly pattern
         wind_speed = wind_base + np.random.normal(0, 1, n)
         wind_speed = np.clip(wind_speed, 0, 20)
-        
+
         # Energy production (MWh) - correlated with wind
         energy_production = 100 + 500 * (wind_speed / 20) + np.random.normal(0, 50, n)
         energy_production = np.clip(energy_production, 0, 1000)
-        
+
         # Temperature (°C) - with daily and seasonal variation
         temp_base = 10 + 8 * np.sin(np.arange(n) / 24)
-        temperature = temp_base + 3 * np.sin(np.arange(n) / (24 * 30)) + np.random.normal(0, 1, n)
-        
+        temperature = (
+            temp_base + 3 * np.sin(np.arange(n) / (24 * 30)) + np.random.normal(0, 1, n)
+        )
+
         # Price (DKK/MWh) - inverse correlated with wind
         price_base = 250 - 100 * (wind_speed / 20)
         price = price_base + 50 * np.random.normal(1, 0.3, n)
         price = np.clip(price, 50, 500)
-        
+
         # Create DataFrame
-        df = pd.DataFrame({
-            'timestamp': timestamps,
-            'wind_speed': wind_speed,
-            'energy_production': energy_production,
-            'temperature': temperature,
-            'price': price
-        })
-        
+        df = pd.DataFrame(
+            {
+                "timestamp": timestamps,
+                "wind_speed": wind_speed,
+                "energy_production": energy_production,
+                "temperature": temperature,
+                "price": price,
+            }
+        )
+
         self.logger.info(f"Generated {len(df)} rows of synthetic energy data")
-        
+
         return df
 
 
@@ -205,7 +209,9 @@ class EnergiDataServiceFetcher(DataFetcher):
         merged = merged.sort_values("timestamp")
         merged = merged.reset_index(drop=True)
 
-        ffill_columns = os.getenv("INGEST_FFILL_COLUMNS", "energy_production,price,temperature,wind_speed")
+        ffill_columns = os.getenv(
+            "INGEST_FFILL_COLUMNS", "energy_production,price,temperature,wind_speed"
+        )
         ffill_limit_raw = os.getenv("INGEST_FFILL_LIMIT", "2")
         try:
             ffill_limit = int(ffill_limit_raw)
@@ -240,7 +246,9 @@ class EnergiDataServiceFetcher(DataFetcher):
                 else:
                     request_params[key] = value
 
-            response = requests.get(url, params=request_params, headers=headers, timeout=self.timeout)
+            response = requests.get(
+                url, params=request_params, headers=headers, timeout=self.timeout
+            )
             response.raise_for_status()
             payload = response.json()
         except Exception as e:
@@ -274,11 +282,15 @@ class EnergiDataServiceFetcher(DataFetcher):
             ]:
                 if candidate in df.columns:
                     timestamp_field = candidate
-                    self.logger.info("Using timestamp field '%s' for %s", candidate, url)
+                    self.logger.info(
+                        "Using timestamp field '%s' for %s", candidate, url
+                    )
                     break
 
         if timestamp_field not in df.columns:
-            self.logger.warning("Missing timestamp field '%s' in %s", self.timestamp_field, url)
+            self.logger.warning(
+                "Missing timestamp field '%s' in %s", self.timestamp_field, url
+            )
             return None
 
         df = df.rename(columns={timestamp_field: "timestamp"})
@@ -374,11 +386,13 @@ class OpenMeteoWeatherFetcher(DataFetcher):
             self.logger.warning("Open-Meteo returned no hourly data")
             return pd.DataFrame(columns=["timestamp", "temperature", "wind_speed"])
 
-        df = pd.DataFrame({
-            "timestamp": pd.to_datetime(times, errors="coerce"),
-            "temperature": temps,
-            "wind_speed": winds,
-        })
+        df = pd.DataFrame(
+            {
+                "timestamp": pd.to_datetime(times, errors="coerce"),
+                "temperature": temps,
+                "wind_speed": winds,
+            }
+        )
         return df
 
 
@@ -412,23 +426,25 @@ class CompositeDataFetcher(DataFetcher):
 
 class DataValidator:
     """Validates data quality and schema"""
-    
-    def __init__(self, 
-                 required_columns: List[str] = None,
-                 null_threshold: float = 0.1):
+
+    def __init__(self, required_columns: List[str] = None, null_threshold: float = 0.1):
         self.required_columns = required_columns or [
-            'timestamp', 'wind_speed', 'energy_production', 'temperature', 'price'
+            "timestamp",
+            "wind_speed",
+            "energy_production",
+            "temperature",
+            "price",
         ]
         self.null_threshold = null_threshold
         self.logger = logging.getLogger(__name__)
-    
+
     def validate(self, df: pd.DataFrame) -> bool:
         """
         Validate DataFrame schema and quality.
-        
+
         Args:
             df: DataFrame to validate
-        
+
         Returns:
             True if valid, False otherwise
         """
@@ -437,31 +453,35 @@ class DataValidator:
         if missing_cols:
             self.logger.error(f"Missing columns: {missing_cols}")
             return False
-        
+
         # Check for null values
         null_ratio = df.isnull().sum() / len(df)
         cols_with_high_nulls = null_ratio[null_ratio > self.null_threshold]
         if not cols_with_high_nulls.empty:
-            self.logger.warning(f"High null ratio in columns: {cols_with_high_nulls.to_dict()}")
-        
+            self.logger.warning(
+                f"High null ratio in columns: {cols_with_high_nulls.to_dict()}"
+            )
+
         # Check for duplicate timestamps
-        if 'timestamp' in df.columns:
-            duplicates = df['timestamp'].duplicated().sum()
+        if "timestamp" in df.columns:
+            duplicates = df["timestamp"].duplicated().sum()
             if duplicates > 0:
                 self.logger.warning(f"Found {duplicates} duplicate timestamps")
-        
+
         self.logger.info(f"Validation passed for {len(df)} records")
         return True
 
 
 class DataIngestionPipeline:
     """Main ingestion pipeline orchestrator"""
-    
-    def __init__(self, 
-                 fetcher: DataFetcher,
-                 validator: DataValidator,
-                 storage_path: str = "data/raw",
-                 failed_path: str = "data/raw/failed"):
+
+    def __init__(
+        self,
+        fetcher: DataFetcher,
+        validator: DataValidator,
+        storage_path: str = "data/raw",
+        failed_path: str = "data/raw/failed",
+    ):
         self.fetcher = fetcher
         self.validator = validator
         self.storage_path = Path(storage_path)
@@ -469,17 +489,17 @@ class DataIngestionPipeline:
         self.failed_path = Path(failed_path)
         self.failed_path.mkdir(parents=True, exist_ok=True)
         self.logger = logging.getLogger(__name__)
-    
-    def fetch_and_validate(self, 
-                          start_date: datetime, 
-                          end_date: datetime) -> Optional[pd.DataFrame]:
+
+    def fetch_and_validate(
+        self, start_date: datetime, end_date: datetime
+    ) -> Optional[pd.DataFrame]:
         """
         Main pipeline: fetch → validate → return
-        
+
         Args:
             start_date: Start date
             end_date: End date
-        
+
         Returns:
             Validated DataFrame or None if validation fails
         """
@@ -487,47 +507,54 @@ class DataIngestionPipeline:
             # Fetch data
             self.logger.info(f"Fetching data from {start_date} to {end_date}")
             df = self.fetcher.fetch(start_date, end_date)
-            
+
             # Validate
             if not self.validator.validate(df):
                 self.logger.error("Data validation failed")
-                self._save_failed_records(df, start_date, end_date, reason="validation_failed")
+                self._save_failed_records(
+                    df, start_date, end_date, reason="validation_failed"
+                )
                 return None
-            
+
             # Add ingestion metadata
-            df['ingestion_timestamp'] = datetime.utcnow()
-            df['data_source'] = self.fetcher.__class__.__name__
-            
+            df["ingestion_timestamp"] = datetime.utcnow()
+            df["data_source"] = self.fetcher.__class__.__name__
+
             self.logger.info(f"Successfully ingested {len(df)} records")
             return df
-        
+
         except Exception as e:
             self.logger.error(f"Ingestion pipeline failed: {e}")
             self._save_failed_records(None, start_date, end_date, reason=str(e))
             return None
-    
+
     def save_parquet(self, df: pd.DataFrame, date: datetime) -> bool:
         """
         Save DataFrame to Parquet (partitioned by date).
-        
+
         Args:
             df: DataFrame to save
             date: Date for partition
-        
+
         Returns:
             True if successful
         """
         try:
-            partition_path = self.storage_path / f"year={date.year}" / f"month={date.month}" / f"day={date.day}"
+            partition_path = (
+                self.storage_path
+                / f"year={date.year}"
+                / f"month={date.month}"
+                / f"day={date.day}"
+            )
             partition_path.mkdir(parents=True, exist_ok=True)
-            
+
             safe_timestamp = date.strftime("%Y%m%dT%H%M%S")
             file_path = partition_path / f"data_{safe_timestamp}.parquet"
-            df.to_parquet(file_path, engine='pyarrow', index=False)
-            
+            df.to_parquet(file_path, engine="pyarrow", index=False)
+
             self.logger.info(f"Saved data to {file_path}")
             return True
-        
+
         except Exception as e:
             self.logger.error(f"Failed to save parquet: {e}")
             return False

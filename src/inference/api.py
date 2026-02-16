@@ -9,7 +9,14 @@ from typing import Optional, List, Dict
 from pathlib import Path
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Request, Response, Header, Depends
+from fastapi import (
+    FastAPI,
+    HTTPException,
+    Request,
+    Response,
+    Header,
+    Depends,
+)
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -21,7 +28,6 @@ import pandas as pd
 import joblib
 
 from src.config import get_config
-from src.ingestion.data_fetcher import MockEnergyDataFetcher
 from src.features.engineer import FeatureEngineer
 from src.regime.detector import RegimeDetectionPipeline
 from src.monitoring import (
@@ -31,20 +37,19 @@ from src.monitoring import (
     set_models_loaded,
     record_batch_request,
     initialize_mlflow,
-    get_mlflow_tracker,
     DriftDetector,
-    RequestLogger,
     PredictionLogger,
     StructuredLogger,
     get_correlation_id,
     set_correlation_id,
     clear_correlation_id,
     send_webhook,
-    should_send_alert
+    should_send_alert,
 )
 
 try:
     from tensorflow import keras
+
     HAS_TF = True
 except Exception:
     keras = None
@@ -63,10 +68,14 @@ logger = logging.getLogger(__name__)
 # Pydantic Models (Request/Response schemas)
 # ============================================================================
 
+
 class EnergyDataPoint(BaseModel):
     """Input schema for energy data"""
+
     wind_speed: float = Field(..., ge=0, le=30, description="Wind speed in m/s")
-    energy_production: float = Field(..., ge=0, le=1000, description="Energy production in MWh")
+    energy_production: float = Field(
+        ..., ge=0, le=1000, description="Energy production in MWh"
+    )
     temperature: float = Field(..., ge=-40, le=50, description="Temperature in Celsius")
     price: float = Field(..., ge=0, le=500, description="Electricity price in DKK/MWh")
     timestamp: Optional[str] = Field(None, description="ISO format timestamp")
@@ -74,6 +83,7 @@ class EnergyDataPoint(BaseModel):
 
 class PredictionResponse(BaseModel):
     """Output schema for predictions"""
+
     prediction: float
     unit: str = "MWh"
     regime: str
@@ -87,6 +97,7 @@ class PredictionResponse(BaseModel):
 
 class HealthCheckResponse(BaseModel):
     """Health check response"""
+
     status: str
     regime_detector: str
     models_loaded: int
@@ -96,11 +107,13 @@ class HealthCheckResponse(BaseModel):
 
 class BatchPredictionRequest(BaseModel):
     """Request for batch predictions"""
+
     data: List[EnergyDataPoint]
 
 
 class BatchPredictionResponse(BaseModel):
     """Response for batch predictions"""
+
     predictions: List[PredictionResponse]
     n_succeeded: int
     n_failed: int
@@ -109,6 +122,7 @@ class BatchPredictionResponse(BaseModel):
 # ============================================================================
 # Authentication & Rate Limiting
 # ============================================================================
+
 
 def _require_api_key(api_key: Optional[str] = Header(None, alias="X-API-Key")) -> None:
     expected = os.getenv("API_KEY")
@@ -123,8 +137,8 @@ def _rate_limit_handler(request: Request, exc: RateLimitExceeded):
         status_code=429,
         content={
             "error": "Rate limit exceeded",
-            "timestamp": datetime.utcnow().isoformat()
-        }
+            "timestamp": datetime.utcnow().isoformat(),
+        },
     )
 
 
@@ -132,9 +146,10 @@ def _rate_limit_handler(request: Request, exc: RateLimitExceeded):
 # Global State & Initialization
 # ============================================================================
 
+
 class AppState:
     """Application state container"""
-    
+
     def __init__(self):
         self.config = get_config()
         self.regime_pipeline = None
@@ -142,8 +157,12 @@ class AppState:
         self.regime_models: Dict[int, Dict[str, object]] = {}
         self.mlflow_tracker = None
         self.drift_detector = None
-        self.drift_auto_check_enabled = os.getenv("DRIFT_AUTO_CHECK_ENABLED", "true").lower() == "true"
-        self.drift_check_interval_seconds = int(os.getenv("DRIFT_CHECK_INTERVAL_SECONDS", "300"))
+        self.drift_auto_check_enabled = (
+            os.getenv("DRIFT_AUTO_CHECK_ENABLED", "true").lower() == "true"
+        )
+        self.drift_check_interval_seconds = int(
+            os.getenv("DRIFT_CHECK_INTERVAL_SECONDS", "300")
+        )
         self.last_drift_check = None
         self.last_drift_result = None
         self.ready = False
@@ -170,7 +189,11 @@ def _load_regime_models(config) -> Dict[int, Dict[str, object]]:
         if keras_path.exists() and HAS_TF:
             try:
                 model = keras.models.load_model(keras_path)
-                models[regime_id] = {"model": model, "type": "keras", "name": model_name}
+                models[regime_id] = {
+                    "model": model,
+                    "type": "keras",
+                    "name": model_name,
+                }
                 logger.info("Loaded regime %s model from %s", regime_id, keras_path)
                 continue
             except Exception as e:
@@ -179,7 +202,11 @@ def _load_regime_models(config) -> Dict[int, Dict[str, object]]:
         if pkl_path.exists():
             try:
                 model = joblib.load(pkl_path)
-                models[regime_id] = {"model": model, "type": "sklearn", "name": model_name}
+                models[regime_id] = {
+                    "model": model,
+                    "type": "sklearn",
+                    "name": model_name,
+                }
                 logger.info("Loaded regime %s model from %s", regime_id, pkl_path)
                 continue
             except Exception as e:
@@ -211,7 +238,12 @@ def _load_registry_models(tracker, stage: str) -> Dict[int, Dict[str, object]]:
             "type": "mlflow_pyfunc",
             "name": registry_name,
         }
-        logger.info("Loaded regime %s model from MLflow registry: %s/%s", regime_id, registry_name, stage)
+        logger.info(
+            "Loaded regime %s model from MLflow registry: %s/%s",
+            regime_id,
+            registry_name,
+            stage,
+        )
 
     return models
 
@@ -224,22 +256,24 @@ async def lifespan(app: FastAPI):
     """
     # Startup
     logger.info("Starting Regime-Aware Prediction Pipeline API...")
-    
+
     try:
         # Initialize feature engineer
         app_state.feature_engineer = FeatureEngineer(
             rolling_windows=app_state.config.features.rolling_windows,
-            volatility_windows=app_state.config.features.volatility_windows
+            volatility_windows=app_state.config.features.volatility_windows,
         )
-        
+
         # Initialize regime detection pipeline
         app_state.regime_pipeline = RegimeDetectionPipeline(
             n_regimes=app_state.config.regime.n_regimes
         )
-        
+
         # Try to load pre-trained regime detector
-        regime_model_path = f"{app_state.config.data.model_registry_path}/regime_detector.pkl"
-        
+        regime_model_path = (
+            f"{app_state.config.data.model_registry_path}/regime_detector.pkl"
+        )
+
         try:
             app_state.regime_pipeline.load_model(regime_model_path)
             logger.info("Regime detector loaded successfully")
@@ -249,12 +283,12 @@ async def lifespan(app: FastAPI):
 
         # Load per-regime models if available
         app_state.regime_models = _load_regime_models(app_state.config)
-        
+
         # Initialize MLflow tracking
         try:
             app_state.mlflow_tracker = initialize_mlflow(
                 tracking_uri=None,  # Uses ./mlruns by default
-                experiment_name="regime-aware-energy-prediction"
+                experiment_name="regime-aware-energy-prediction",
             )
             if app_state.mlflow_tracker.is_connected():
                 logger.info("MLflow tracking initialized")
@@ -262,34 +296,36 @@ async def lifespan(app: FastAPI):
                 logger.warning("MLflow tracking disabled")
         except Exception as e:
             logger.warning(f"MLflow initialization failed: {e}")
-        
+
         # Initialize drift detector
         try:
             app_state.drift_detector = DriftDetector(
                 reference_window=1000,
                 detection_window=100,
                 kl_threshold=0.1,
-                wasserstein_threshold=0.3
+                wasserstein_threshold=0.3,
             )
             logger.info("Drift detector initialized")
         except Exception as e:
             logger.warning(f"Drift detector initialization failed: {e}")
-        
+
         # Set Prometheus metrics
-        model_info = {rid: entry["name"] for rid, entry in app_state.regime_models.items()}
+        model_info = {
+            rid: entry["name"] for rid, entry in app_state.regime_models.items()
+        }
         set_api_info("1.0.0", app_state.config.regime.n_regimes, model_info)
         set_models_loaded(len(app_state.regime_models))
-        
+
         app_state.ready = True
         logger.info("API initialization complete with monitoring enabled")
-    
+
     except Exception as e:
         app_state.error_message = str(e)
         logger.error(f"Failed to initialize API: {e}")
         raise
-    
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting down API...")
 
@@ -299,7 +335,7 @@ app = FastAPI(
     title="Regime-Aware Energy Prediction API",
     description="Context-aware forecasting using multi-regime modeling",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
@@ -320,22 +356,23 @@ async def correlation_id_middleware(request: Request, call_next):
     # Get or generate correlation ID
     correlation_id = request.headers.get("X-Correlation-ID") or get_correlation_id()
     set_correlation_id(correlation_id)
-    
+
     # Process request
     response = await call_next(request)
-    
+
     # Add correlation ID to response headers
     response.headers["X-Correlation-ID"] = correlation_id
-    
+
     # Clear correlation ID after request
     clear_correlation_id()
-    
+
     return response
 
 
 # ============================================================================
 # Endpoints
 # ============================================================================
+
 
 @app.get("/", tags=["info"])
 async def root():
@@ -351,12 +388,14 @@ async def root():
             "registry_models": "/registry/models (GET)",
             "registry_health": "/registry/health (GET)",
             "registry_reload": "/registry/reload (POST)",
-            "metrics": "/metrics (GET)"
-        }
+            "metrics": "/metrics (GET)",
+        },
     }
 
 
-@app.get("/registry/status", tags=["monitoring"], dependencies=[Depends(_require_api_key)])
+@app.get(
+    "/registry/status", tags=["monitoring"], dependencies=[Depends(_require_api_key)]
+)
 async def registry_status():
     """
     Report MLflow registry configuration and loaded models per regime.
@@ -375,11 +414,13 @@ async def registry_status():
         "registry_enabled": registry_enabled,
         "registry_stage": registry_stage,
         "models_loaded": model_sources,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.utcnow().isoformat(),
     }
 
 
-@app.get("/registry/models", tags=["monitoring"], dependencies=[Depends(_require_api_key)])
+@app.get(
+    "/registry/models", tags=["monitoring"], dependencies=[Depends(_require_api_key)]
+)
 async def registry_models():
     """
     List MLflow registry models and latest versions.
@@ -391,11 +432,13 @@ async def registry_models():
     return {
         "models": models or [],
         "count": len(models or []),
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.utcnow().isoformat(),
     }
 
 
-@app.get("/registry/health", tags=["monitoring"], dependencies=[Depends(_require_api_key)])
+@app.get(
+    "/registry/health", tags=["monitoring"], dependencies=[Depends(_require_api_key)]
+)
 async def registry_health():
     """
     Check MLflow registry connectivity and access.
@@ -409,12 +452,14 @@ async def registry_health():
         "connected": True,
         "access_ok": access_ok,
         "model_count": len(models or []),
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.utcnow().isoformat(),
     }
 
 
 @limiter.limit(os.getenv("RATE_LIMIT", "60/minute"))
-@app.post("/registry/reload", tags=["monitoring"], dependencies=[Depends(_require_api_key)])
+@app.post(
+    "/registry/reload", tags=["monitoring"], dependencies=[Depends(_require_api_key)]
+)
 async def registry_reload(request: Request):
     """
     Reload registry models without restarting the API.
@@ -440,50 +485,58 @@ async def registry_reload(request: Request):
         "registry_stage": registry_stage,
         "models_reloaded": list(registry_models.keys()),
         "models_loaded": model_info,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.utcnow().isoformat(),
     }
 
 
 @app.get("/health", response_model=HealthCheckResponse, tags=["health"])
 async def health_check():
     """Health check endpoint"""
-    
+
     if not app_state.ready:
         raise HTTPException(
-            status_code=503,
-            detail=f"Service not ready: {app_state.error_message}"
+            status_code=503, detail=f"Service not ready: {app_state.error_message}"
         )
-    
-    mlflow_connected = app_state.mlflow_tracker and app_state.mlflow_tracker.is_connected() if app_state.mlflow_tracker else False
-    
+
+    mlflow_connected = (
+        app_state.mlflow_tracker and app_state.mlflow_tracker.is_connected()
+        if app_state.mlflow_tracker
+        else False
+    )
+
     return HealthCheckResponse(
         status="healthy",
         regime_detector="loaded" if app_state.regime_pipeline else "not_loaded",
         models_loaded=len(app_state.regime_models),
         mlflow_connected=mlflow_connected,
-        timestamp=datetime.utcnow().isoformat()
+        timestamp=datetime.utcnow().isoformat(),
     )
 
 
 @limiter.limit(os.getenv("RATE_LIMIT", "60/minute"))
-@app.post("/predict", response_model=PredictionResponse, tags=["prediction"], dependencies=[Depends(_require_api_key)])
+@app.post(
+    "/predict",
+    response_model=PredictionResponse,
+    tags=["prediction"],
+    dependencies=[Depends(_require_api_key)],
+)
 async def predict(request: Request, data: EnergyDataPoint) -> PredictionResponse:
     """
     Generate a single prediction with regime detection.
-    
+
     Args:
         data: Energy data point
-    
+
     Returns:
         Prediction with regime information
     """
     start_time = datetime.utcnow()
-    
+
     # Initialize metrics tracker and loggers
     metrics_tracker = MetricsTracker()
     metrics_tracker.start_request()
     pred_logger = PredictionLogger()
-    
+
     try:
         # Normalize timestamp; fall back to current time on missing/invalid values
         if data.timestamp:
@@ -494,22 +547,36 @@ async def predict(request: Request, data: EnergyDataPoint) -> PredictionResponse
             parsed_timestamp = pd.Timestamp.utcnow()
 
         # Convert to DataFrame for processing
-        df = pd.DataFrame([{
-            'timestamp': parsed_timestamp,
-            'wind_speed': data.wind_speed,
-            'energy_production': data.energy_production,
-            'temperature': data.temperature,
-            'price': data.price
-        }])
-        
+        df = pd.DataFrame(
+            [
+                {
+                    "timestamp": parsed_timestamp,
+                    "wind_speed": data.wind_speed,
+                    "energy_production": data.energy_production,
+                    "temperature": data.temperature,
+                    "price": data.price,
+                }
+            ]
+        )
+
         # Engineer features
         # For single sample, keep NaNs to avoid empty frames
         metrics_tracker.start_feature_engineering()
-        df_with_features = app_state.feature_engineer.engineer_features(df, dropna=False)
+        df_with_features = app_state.feature_engineer.engineer_features(
+            df, dropna=False
+        )
         metrics_tracker.end_feature_engineering()
 
-        excluded_cols = ['timestamp', 'ingestion_timestamp', 'data_source', 'energy_production', 'regime']
-        feature_cols = [col for col in df_with_features.columns if col not in excluded_cols]
+        excluded_cols = [
+            "timestamp",
+            "ingestion_timestamp",
+            "data_source",
+            "energy_production",
+            "regime",
+        ]
+        feature_cols = [
+            col for col in df_with_features.columns if col not in excluded_cols
+        ]
         X = df_with_features[feature_cols].fillna(0).values
 
         # Predict regime using trained detector if available
@@ -518,13 +585,18 @@ async def predict(request: Request, data: EnergyDataPoint) -> PredictionResponse
         confidence = 0.0
         if app_state.config.regime.algorithm == "bayesian_cpd":
             regime_id = None
-        elif app_state.regime_pipeline and app_state.regime_pipeline.detector.model is not None:
+        elif (
+            app_state.regime_pipeline
+            and app_state.regime_pipeline.detector.model is not None
+        ):
             try:
                 regime_proba = app_state.regime_pipeline.detector.predict_proba(X)
                 regime_id = int(np.argmax(regime_proba[0]))
                 confidence = float(np.max(regime_proba[0]))
             except Exception as e:
-                logger.warning(f"Regime prediction failed; falling back to heuristic: {e}")
+                logger.warning(
+                    f"Regime prediction failed; falling back to heuristic: {e}"
+                )
         metrics_tracker.end_regime_detection()
 
         if regime_id is None:
@@ -538,7 +610,9 @@ async def predict(request: Request, data: EnergyDataPoint) -> PredictionResponse
                 regime_id = 2
                 confidence = 0.78
 
-        regime_name = {0: "volatile", 1: "neutral", 2: "stable"}.get(regime_id, "unknown")
+        regime_name = {0: "volatile", 1: "neutral", 2: "stable"}.get(
+            regime_id, "unknown"
+        )
 
         # Generate prediction using trained model if available
         model_entry = app_state.regime_models.get(regime_id)
@@ -557,9 +631,9 @@ async def predict(request: Request, data: EnergyDataPoint) -> PredictionResponse
         else:
             model_name = "mock"
             base_pred = data.energy_production * 1.05 + np.random.normal(0, 10)
-        
+
         latency_ms = (datetime.utcnow() - start_time).total_seconds() * 1000
-        
+
         # Record metrics
         model_type = model_entry.get("type", "mock") if model_entry else "mock"
         metrics_tracker.record_prediction(
@@ -569,9 +643,9 @@ async def predict(request: Request, data: EnergyDataPoint) -> PredictionResponse
             model_type=model_type,
             confidence=confidence,
             pred_value=base_pred,
-            status="success"
+            status="success",
         )
-        
+
         # Log prediction with structured logger
         pred_logger.log_prediction(
             regime_id=regime_id,
@@ -579,9 +653,9 @@ async def predict(request: Request, data: EnergyDataPoint) -> PredictionResponse
             model_name=model_name,
             prediction=base_pred,
             confidence=confidence,
-            latency_ms=latency_ms
+            latency_ms=latency_ms,
         )
-        
+
         # Update drift detector
         if app_state.drift_detector:
             try:
@@ -589,7 +663,7 @@ async def predict(request: Request, data: EnergyDataPoint) -> PredictionResponse
                 key_features = {
                     "wind_speed": data.wind_speed,
                     "temperature": data.temperature,
-                    "price": data.price
+                    "price": data.price,
                 }
                 app_state.drift_detector.update_features(key_features)
                 app_state.drift_detector.update_prediction(base_pred)
@@ -601,34 +675,50 @@ async def predict(request: Request, data: EnergyDataPoint) -> PredictionResponse
         if app_state.drift_detector and app_state.drift_auto_check_enabled:
             try:
                 now = datetime.utcnow()
-                if app_state.last_drift_check is None or (
-                    now - app_state.last_drift_check
-                ).total_seconds() >= app_state.drift_check_interval_seconds:
+                if (
+                    app_state.last_drift_check is None
+                    or (now - app_state.last_drift_check).total_seconds()
+                    >= app_state.drift_check_interval_seconds
+                ):
                     status = app_state.drift_detector.get_status()
                     if status.get("reference_distributions_set"):
-                        results = app_state.drift_detector.check_drift(auto_update_reference=False)
+                        results = app_state.drift_detector.check_drift(
+                            auto_update_reference=False
+                        )
                         app_state.last_drift_result = results
                         app_state.last_drift_check = now
 
                         if results.get("drift_detected"):
-                            drift_logger.warning("Drift detected", alerts=results.get("alerts", []))
+                            drift_logger.warning(
+                                "Drift detected", alerts=results.get("alerts", [])
+                            )
                             webhook_url = os.getenv("ALERT_WEBHOOK_URL")
                             min_severity = os.getenv("ALERT_MIN_SEVERITY", "medium")
-                            timeout_seconds = int(os.getenv("ALERT_TIMEOUT_SECONDS", "5"))
+                            timeout_seconds = int(
+                                os.getenv("ALERT_TIMEOUT_SECONDS", "5")
+                            )
 
-                            if webhook_url and should_send_alert(results.get("alerts", []), min_severity):
+                            if webhook_url and should_send_alert(
+                                results.get("alerts", []), min_severity
+                            ):
                                 payload = {
                                     "event": "drift_detected",
                                     "timestamp": results.get("timestamp"),
                                     "alerts": results.get("alerts", []),
-                                    "status": status
+                                    "status": status,
                                 }
-                                send_webhook(webhook_url, payload, timeout_seconds=timeout_seconds)
+                                send_webhook(
+                                    webhook_url,
+                                    payload,
+                                    timeout_seconds=timeout_seconds,
+                                )
                         else:
-                            drift_logger.info("Drift check complete", drift_detected=False)
+                            drift_logger.info(
+                                "Drift check complete", drift_detected=False
+                            )
             except Exception as e:
                 drift_logger.error("Drift auto-check failed", error=e)
-        
+
         # MLflow tracking (sampled)
         if app_state.mlflow_tracker and app_state.mlflow_tracker.is_connected():
             try:
@@ -637,11 +727,11 @@ async def predict(request: Request, data: EnergyDataPoint) -> PredictionResponse
                     model_name=model_name,
                     prediction=base_pred,
                     confidence=confidence,
-                    latency_ms=latency_ms
+                    latency_ms=latency_ms,
                 )
             except Exception as e:
                 logger.debug(f"MLflow tracking failed: {e}")
-        
+
         logger.info(
             "Prediction complete | regime=%s model=%s confidence=%.3f",
             regime_name,
@@ -656,34 +746,41 @@ async def predict(request: Request, data: EnergyDataPoint) -> PredictionResponse
             regime_confidence=float(confidence),
             model_name=model_name,
             inference_latency_ms=float(latency_ms),
-            timestamp=datetime.utcnow().isoformat()
+            timestamp=datetime.utcnow().isoformat(),
         )
-    
+
     except Exception as e:
         # Record error metrics
         metrics_tracker.record_error(type(e).__name__)
         pred_logger = PredictionLogger()
         pred_logger.log_prediction_error(e)
-        
+
         logger.error(f"Prediction failed: {e}")
         raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
 
 
 @limiter.limit(os.getenv("RATE_LIMIT", "60/minute"))
-@app.post("/batch_predict", response_model=BatchPredictionResponse, tags=["prediction"], dependencies=[Depends(_require_api_key)])
-async def batch_predict(request: Request, batch_request: BatchPredictionRequest) -> BatchPredictionResponse:
+@app.post(
+    "/batch_predict",
+    response_model=BatchPredictionResponse,
+    tags=["prediction"],
+    dependencies=[Depends(_require_api_key)],
+)
+async def batch_predict(
+    request: Request, batch_request: BatchPredictionRequest
+) -> BatchPredictionResponse:
     """
     Generate batch predictions.
-    
+
     Args:
         batch_request: Batch prediction request with array of data points
-    
+
     Returns:
         Array of predictions with success/failure counts
     """
     predictions = []
     n_failed = 0
-    
+
     for data_point in batch_request.data:
         try:
             pred = await predict(data_point)
@@ -691,14 +788,12 @@ async def batch_predict(request: Request, batch_request: BatchPredictionRequest)
         except Exception as e:
             logger.warning(f"Batch prediction failed for data point: {e}")
             n_failed += 1
-    
+
     # Record batch metrics
     record_batch_request(n_succeeded=len(predictions), n_failed=n_failed)
-    
+
     return BatchPredictionResponse(
-        predictions=predictions,
-        n_succeeded=len(predictions),
-        n_failed=n_failed
+        predictions=predictions, n_succeeded=len(predictions), n_failed=n_failed
     )
 
 
@@ -706,7 +801,7 @@ async def batch_predict(request: Request, batch_request: BatchPredictionRequest)
 async def metrics():
     """
     Prometheus metrics endpoint.
-    
+
     Returns metrics in Prometheus text format.
     """
     metrics_data, content_type = get_prometheus_metrics()
@@ -720,12 +815,14 @@ async def status():
     """
     mlflow_status = "disconnected"
     if app_state.mlflow_tracker:
-        mlflow_status = "connected" if app_state.mlflow_tracker.is_connected() else "disabled"
-    
+        mlflow_status = (
+            "connected" if app_state.mlflow_tracker.is_connected() else "disabled"
+        )
+
     drift_status = None
     if app_state.drift_detector:
         drift_status = app_state.drift_detector.get_status()
-    
+
     return {
         "ready": app_state.ready,
         "config": {
@@ -734,14 +831,16 @@ async def status():
         },
         "models": {
             "regime_detector": app_state.config.regime.algorithm,
-            "regime_models": [entry["name"] for entry in app_state.regime_models.values()]
+            "regime_models": [
+                entry["name"] for entry in app_state.regime_models.values()
+            ],
         },
         "monitoring": {
             "mlflow": mlflow_status,
             "drift_detector": drift_status,
-            "prometheus_metrics": "enabled"
+            "prometheus_metrics": "enabled",
         },
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.utcnow().isoformat(),
     }
 
 
@@ -749,12 +848,12 @@ async def status():
 async def check_drift():
     """
     Manually trigger drift detection check.
-    
+
     Returns drift analysis results.
     """
     if not app_state.drift_detector:
         raise HTTPException(status_code=503, detail="Drift detector not initialized")
-    
+
     try:
         results = app_state.drift_detector.check_drift(auto_update_reference=False)
         return results
@@ -763,44 +862,50 @@ async def check_drift():
         raise HTTPException(status_code=500, detail=f"Drift check failed: {str(e)}")
 
 
-@app.post("/drift/set_reference", tags=["monitoring"], dependencies=[Depends(_require_api_key)])
+@app.post(
+    "/drift/set_reference",
+    tags=["monitoring"],
+    dependencies=[Depends(_require_api_key)],
+)
 async def set_drift_reference():
     """
     Set current distributions as reference baseline for drift detection.
     """
     if not app_state.drift_detector:
         raise HTTPException(status_code=503, detail="Drift detector not initialized")
-    
+
     try:
         app_state.drift_detector.set_reference_distributions()
         status = app_state.drift_detector.get_status()
         return {
             "message": "Reference distributions updated",
             "status": status,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.utcnow().isoformat(),
         }
     except Exception as e:
         logger.error(f"Failed to set reference: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to set reference: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to set reference: {str(e)}"
+        )
 
 
 @app.get("/drift/alerts", tags=["monitoring"], dependencies=[Depends(_require_api_key)])
 async def get_drift_alerts(hours: int = 24):
     """
     Get recent drift alerts.
-    
+
     Args:
         hours: Number of hours to look back (default: 24)
     """
     if not app_state.drift_detector:
         raise HTTPException(status_code=503, detail="Drift detector not initialized")
-    
+
     alerts = app_state.drift_detector.get_recent_alerts(hours=hours)
     return {
         "alerts": alerts,
         "count": len(alerts),
         "hours": hours,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.utcnow().isoformat(),
     }
 
 
@@ -813,9 +918,13 @@ async def get_last_drift_check():
         raise HTTPException(status_code=503, detail="Drift detector not initialized")
 
     return {
-        "last_check": app_state.last_drift_check.isoformat() if app_state.last_drift_check else None,
+        "last_check": (
+            app_state.last_drift_check.isoformat()
+            if app_state.last_drift_check
+            else None
+        ),
         "last_result": app_state.last_drift_result,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.utcnow().isoformat(),
     }
 
 
@@ -823,15 +932,13 @@ async def get_last_drift_check():
 # Error Handlers
 # ============================================================================
 
+
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request, exc):
     """Custom HTTP exception handler"""
     return JSONResponse(
         status_code=exc.status_code,
-        content={
-            "error": exc.detail,
-            "timestamp": datetime.utcnow().isoformat()
-        }
+        content={"error": exc.detail, "timestamp": datetime.utcnow().isoformat()},
     )
 
 
@@ -840,16 +947,14 @@ async def value_error_handler(request, exc):
     """Handle validation errors"""
     return JSONResponse(
         status_code=422,
-        content={
-            "error": str(exc),
-            "timestamp": datetime.utcnow().isoformat()
-        }
+        content={"error": str(exc), "timestamp": datetime.utcnow().isoformat()},
     )
 
 
 # ============================================================================
 # Startup Event
 # ============================================================================
+
 
 @app.on_event("startup")
 async def startup_event():
@@ -859,12 +964,12 @@ async def startup_event():
 
 if __name__ == "__main__":
     import uvicorn
-    
+
     config = get_config()
     uvicorn.run(
         "src.inference.api:app",
         host=config.inference.host,
         port=config.inference.port,
         reload=config.inference.reload,
-        log_level=config.inference.log_level
+        log_level=config.inference.log_level,
     )
