@@ -30,13 +30,13 @@ python-multipart>=0.0.6
 slowapi>=0.1.8
 
 # ML Experiment Tracking & Registry
-mlflow==2.8.1
-mlflow-skinny==2.8.1
+mlflow>=2.22.4
+mlflow-skinny>=2.22.4
 
 # Data Storage & Serialization
-pyarrow==13.0.0
-polars==0.18.15
-protobuf==4.24.4
+pyarrow>=15.0.0
+polars>=0.20.0
+protobuf>=4.25.8,<5.0.0
 
 # Monitoring, Logging & Observability
 prometheus-client==0.17.1
