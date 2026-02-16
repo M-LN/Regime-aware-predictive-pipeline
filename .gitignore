@@ -142,3 +142,6 @@ mlruns/
 
 # Docker
 docker-compose.override.yml
+
+# Temporary pip output files
+=*
