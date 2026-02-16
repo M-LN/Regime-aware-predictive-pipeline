@@ -36,6 +36,7 @@ mlflow-skinny>=2.22.4
 # Data Storage & Serialization
 pyarrow>=15.0.0
 polars>=0.20.0
+# protobuf upper bound <5.0.0 required for compatibility with mlflow and other ML dependencies
 protobuf>=4.25.8,<5.0.0
 
 # Monitoring, Logging & Observability
