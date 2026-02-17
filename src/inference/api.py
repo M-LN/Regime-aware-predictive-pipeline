@@ -787,7 +787,7 @@ async def batch_predict(
 
     for data_point in batch_request.data:
         try:
-            pred = await predict(data_point)
+            pred = await predict(request, data_point)
             predictions.append(pred)
         except Exception as e:
             logger.warning(f"Batch prediction failed for data point: {e}")
