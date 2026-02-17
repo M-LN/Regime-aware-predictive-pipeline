@@ -10,11 +10,7 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-SEVERITY_ORDER = {
-    "low": 0,
-    "medium": 1,
-    "high": 2
-}
+SEVERITY_ORDER = {"low": 0, "medium": 1, "high": 2}
 
 
 def should_send_alert(alerts: List[Dict], min_severity: str) -> bool:
@@ -36,7 +32,7 @@ def send_webhook(url: str, payload: Dict, timeout_seconds: int = 5) -> bool:
             url,
             data=json.dumps(payload),
             headers={"Content-Type": "application/json"},
-            timeout=timeout_seconds
+            timeout=timeout_seconds,
         )
         response.raise_for_status()
         return True
