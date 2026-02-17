@@ -273,7 +273,9 @@ class DriftDetector:
         severity = (
             "high"
             if sum([ks_drift, wasserstein_drift, kl_drift]) >= 2
-            else "medium" if drift_detected else "low"
+            else "medium"
+            if drift_detected
+            else "low"
         )
 
         return {

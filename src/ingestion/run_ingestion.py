@@ -225,9 +225,9 @@ def main() -> None:
     if weather_base_url and "forecast" in weather_base_url.lower():
         today = datetime.now(timezone.utc).date()
         if end_time.date() < today:
-            os.environ["WEATHER_BASE_URL"] = (
-                "https://archive-api.open-meteo.com/v1/archive"
-            )
+            os.environ[
+                "WEATHER_BASE_URL"
+            ] = "https://archive-api.open-meteo.com/v1/archive"
             logger.info("Switching to Open-Meteo archive for historical window")
 
     fetcher = _build_fetcher(config)

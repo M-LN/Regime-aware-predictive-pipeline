@@ -32,7 +32,6 @@ def sample_dataframe():
 
 
 class TestHMMRegimeDetector:
-
     def test_detector_initialization(self):
         """Test detector can be initialized"""
         detector = HMMRegimeDetector(n_regimes=3)
@@ -71,7 +70,6 @@ class TestHMMRegimeDetector:
 
 
 class TestRegimeDetectionPipeline:
-
     def test_pipeline_fit_predict(self, sample_dataframe):
         """Test pipeline fit and predict"""
         pipeline = RegimeDetectionPipeline(n_regimes=3)

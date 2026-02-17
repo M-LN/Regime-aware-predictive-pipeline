@@ -15,7 +15,6 @@ def client():
 
 
 class TestAPIEndpoints:
-
     def test_root_endpoint(self, client):
         """Test root endpoint"""
         response = client.get("/")

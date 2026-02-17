@@ -30,7 +30,6 @@ def ingestion_pipeline(data_fetcher, data_validator):
 
 
 class TestMockDataFetcher:
-
     def test_fetch_returns_dataframe(self, data_fetcher):
         """Test that fetcher returns DataFrame"""
         start = datetime(2026, 1, 1)
@@ -75,7 +74,6 @@ class TestMockDataFetcher:
 
 
 class TestDataValidator:
-
     def test_validate_valid_data(self, data_validator):
         """Test validation passes for good data"""
         df = pd.DataFrame(
@@ -113,7 +111,6 @@ class TestDataValidator:
 
 
 class TestIngestionPipeline:
-
     def test_pipeline_integration(self, ingestion_pipeline):
         """Test full ingestion pipeline"""
         start = datetime(2026, 1, 1)

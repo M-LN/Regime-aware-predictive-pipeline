@@ -31,7 +31,6 @@ def feature_engineer():
 
 
 class TestFeatureEngineer:
-
     def test_engineer_features_returns_dataframe(self, feature_engineer, sample_data):
         """Test that engineering returns DataFrame"""
         result = feature_engineer.engineer_features(sample_data)
@@ -64,7 +63,6 @@ class TestFeatureEngineer:
 
 
 class TestFeatureScaler:
-
     def test_minmax_scaler_fit(self, sample_data):
         """Test MinMax scaler fitting"""
         scaler = FeatureScaler(method="minmax")
