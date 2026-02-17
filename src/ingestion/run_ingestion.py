@@ -3,7 +3,7 @@ Run data ingestion for a given time range.
 """
 
 import argparse
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import os
 import json
 import logging
@@ -205,7 +205,7 @@ def main() -> None:
             end_time = latest_timestamp
             logger.info("Using latest available EDS price timestamp: %s", end_time.isoformat())
         else:
-            end_time = datetime.utcnow()
+            end_time = datetime.now(timezone.utc)
 
     if args.start:
         start_time = pd.to_datetime(args.start, errors="coerce")
@@ -218,7 +218,7 @@ def main() -> None:
 
     weather_base_url = os.getenv("WEATHER_BASE_URL", "")
     if weather_base_url and "forecast" in weather_base_url.lower():
-        today = datetime.utcnow().date()
+        today = datetime.now(timezone.utc).date()
         if end_time.date() < today:
             os.environ["WEATHER_BASE_URL"] = "https://archive-api.open-meteo.com/v1/archive"
             logger.info("Switching to Open-Meteo archive for historical window")

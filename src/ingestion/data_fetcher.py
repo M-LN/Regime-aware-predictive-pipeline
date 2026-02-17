@@ -6,7 +6,7 @@ import logging
 import json
 import os
 from abc import ABC, abstractmethod
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any
 
 import pandas as pd
@@ -495,7 +495,7 @@ class DataIngestionPipeline:
                 return None
             
             # Add ingestion metadata
-            df['ingestion_timestamp'] = datetime.utcnow()
+            df['ingestion_timestamp'] = datetime.now(timezone.utc)
             df['data_source'] = self.fetcher.__class__.__name__
             
             self.logger.info(f"Successfully ingested {len(df)} records")
@@ -552,7 +552,7 @@ class DataIngestionPipeline:
             if df is not None:
                 payload["records"] = df.to_dict(orient="records")
 
-            timestamp = datetime.utcnow().strftime("%Y%m%dT%H%M%S")
+            timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
             file_path = self.failed_path / f"failed_{timestamp}.json"
             with file_path.open("w", encoding="utf-8") as handle:
                 json.dump(payload, handle, ensure_ascii=True, indent=2, default=str)
