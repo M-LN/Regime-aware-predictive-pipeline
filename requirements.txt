@@ -66,7 +66,6 @@ marshmallow==3.20.1
 
 # Explainability & Interpretability
 shap==0.43.0
-lime==0.2.0
 
 # Visualization
 matplotlib==3.8.1
