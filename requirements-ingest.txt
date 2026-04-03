@@ -1,0 +1,18 @@
+# Minimal dependencies for the scheduled ingestion job (CI).
+# Intentionally excludes GPU/CUDA-heavy packages (tensorflow, torch, keras,
+# torchvision, catboost, lightgbm, shap, tsfresh, …) that are not used during
+# data ingestion and would exhaust disk space on GitHub-hosted runners.
+
+# Core data processing
+numpy>=1.26.0,<2.0.0
+pandas>=2.2.0
+
+# HTTP requests
+requests>=2.31.0
+
+# Parquet storage (used in DataIngestionPipeline.save_parquet)
+pyarrow>=15.0.0
+
+# Configuration loading (src/config.py)
+pyyaml>=6.0
+python-dotenv>=1.0.0
